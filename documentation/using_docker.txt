@@ -1,0 +1,12 @@
+Steps to follow:
+
+1. connect to cluster (hno)
+2. go to a free gpu (in your case, gpu7-0)
+3. go to code/ directory
+4. type "make start_container"
+This will print a lot of text, including a long hash in the end
+5. type "docker exec -it <hash> bash"
+6. go to /gpfs01/bethge/home/swu/<your-repo-name>/code/
+7. execute python files with python3 <filename.py>
+
+Ideally, you can use tmux to run code that still continues running while you exit the cluster. See online for more info on tmux (really quite helpful). If you use tmux, you can also skip steps 2--6 after the first time.
