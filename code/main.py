@@ -136,10 +136,11 @@ def main_worker(gpu, ngpus_per_node, args):
         model = models.__dict__[args.arch](pretrained=True)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model = v1resnet18(n_img_per_batch = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224)
+        model = models.v1resnet18(n_img_per_batch = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224)
 
 
     if args.distributed:
+        print('using distributed device')
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
         # DistributedDataParallel will use all available devices.
