@@ -1,4 +1,11 @@
 """This code is adapted from the resnet.py file in torchvision.model"""
+import torch
+import torchvision
+import torchvision.transforms as transforms
+import numpy as np
+import scipy.io
+import torch.nn.functional as F
+import torch.optim as optim
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
@@ -135,6 +142,8 @@ class mean_padding(torch.nn.Module): # checked
         """
         assert x.shape[2] == x.shape[3],'The image to be mean padded should be square sized'
         mean_batch = torch.mean(torch.mean(x,3),2).view([self.n_img_per_batch,1,1,1])
+        print(type(self.padding),'self.padding')
+        print(type(mean_batch),'mean_batch')
         mean_pad = torch.mul(self.padding,mean_batch)
         mean_pad[:,:,self.pad_l:-self.pad_l,self.pad_l:-self.pad_l] = x
         
@@ -153,7 +162,7 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         self.n_img_per_batch = n_img_per_batch
         print(self.n_img_per_batch)
         
-    def load_filter_bank(self,path ='/Users/shuchenwu/Desktop/research/Tuebingen_lab_rotation/code/spatial_filters_224_by_224.mat'):
+    def load_filter_bank(self,path ='./spatial_filters_224_by_224.mat'):
         '''Assumes a certain structure of filter file, returns a filter bank'''
         mat = scipy.io.loadmat(path)
         spatial_filters_imag = mat['spatial_filters_imag'] 
@@ -242,9 +251,7 @@ class Normalization(nn.Module):
         self.n_feature = self.n_phase*self.n_orient*self.n_freq
         self.convx_sz = self.sz+self.padxy_t+self.padxy_b-self.l_y + 1
         self.convy_sz = self.sz+self.padxy_l+self.padxy_r-self.l_x + 1
-        print(self.convy_sz)
-        print(self.sz,self.padxy_l,self.padxy_r,self.l_x )
-
+        
 
     def forward(self, x):
         """shape of x: ([n_imag_per_batch, 2*n_freq*n_orientation, imsize, imsize])
@@ -318,7 +325,7 @@ class V1_Imagenet_net(nn.Module):
         self.conv_after_y = self.conv_after_x # assume square images
         self.logabor = log_Gabor_convolution(imsize,n_img_per_batch)
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
-        self.normalization =  Normalization(sz = sz_after_filtering,n_img_per_batch = n_img_per_batch)
+        self.normalization =  Normalization(sz = self.sz_after_filtering,n_img_per_batch = n_img_per_batch)
         self.nonlinearity = Nonlinearity()
 
     def forward(self, images):
