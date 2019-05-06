@@ -82,8 +82,7 @@ def main():
                       'from checkpoints.')
 
 
-    if args.dist_url == "env://" and args.world_size == -1:
-        args.world_size = int(os.environ["WORLD_SIZE"])
+    args.world_size = 1  
 
 
     ngpus_per_node = torch.cuda.device_count()
@@ -106,7 +105,8 @@ def main_worker(args):
 
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    # model.to(device)
+    model = torch.nn.DataParallel(model).to(device)
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().to(device)
 
@@ -167,7 +167,7 @@ def main_worker(args):
     val_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(valdir, transforms.Compose([
             transforms.Resize(256), # Strange random RandomResizedCrop(224,scale = (0.08,0.50)), 
-            transforms.CenterCrop(),
+            transforms.CenterCrop(224),
             transforms.Grayscale(),
             transforms.ToTensor(),
             transforms.Normalize((0.5,), (0.5,))
@@ -221,9 +221,10 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         # input = input.cuda(args.gpu, non_blocking=True)
         # target = target.cuda(args.gpu, non_blocking=True)
-        input = input.to(device)
+        input = input.to(device).contiguous()
         target = target.to(device)
         # compute output
+        #print(input.dtype)
         output = model(input)
         loss = criterion(output, target)
 
