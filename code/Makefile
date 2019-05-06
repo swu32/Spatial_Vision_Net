@@ -8,6 +8,6 @@ build_container:
 
 start_container:
 	make build_container
-	GPU=0 /gpfs01/bethge/home/swu/docker-deeplearning/agmb-docker run --shm-size $(shm)G -v /gpfs01/bethge/data/:/gpfs01/bethge/data -d swu_pytorch_$(docker_number)
+	GPU=0 /gpfs01/bethge/home/swu/docker-deeplearning/agmb-docker run --shm-size 32G -v /gpfs01/bethge/data/:/gpfs01/bethge/data -d swu_pytorch_$(docker_number)
 
 
