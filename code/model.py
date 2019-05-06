@@ -76,7 +76,7 @@ class V1_ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.fc = nn.Linear(512 *4* block.expansion, num_classes)
 
 
         for m in self.modules():
@@ -133,7 +133,8 @@ class mean_padding(torch.nn.Module): # checked
         sz: size of image, this function assumes a square image. 
         """
         super(mean_padding, self).__init__()
-        self.padding = torch.ones([1,1,sz+pad_l*2,sz+pad_l*2])
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.padding = torch.ones([1,1,sz+pad_l*2,sz+pad_l*2]).to(device)
         self.pad_l = pad_l
         self.n_img_per_batch = n_img_per_batch
 
@@ -142,12 +143,10 @@ class mean_padding(torch.nn.Module): # checked
         """
         assert x.shape[2] == x.shape[3],'The image to be mean padded should be square sized'
         mean_batch = torch.mean(torch.mean(x,3),2).view([self.n_img_per_batch,1,1,1])
-        print(type(self.padding),'self.padding')
-        print(type(mean_batch),'mean_batch')
-        mean_pad = torch.mul(self.padding,mean_batch)
-        mean_pad[:,:,self.pad_l:-self.pad_l,self.pad_l:-self.pad_l] = x
+        mean_batch = torch.mul(self.padding,mean_batch)
+        mean_batch[:,:,self.pad_l:-self.pad_l,self.pad_l:-self.pad_l] = x
         
-        return mean_pad
+        return mean_batch
 
 
 class log_Gabor_convolution(torch.nn.Module): # checked
@@ -160,8 +159,8 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         self.mean_padding = mean_padding(pad_l, n_img_per_batch,sz)
         self.combined_filters = self.load_filter_bank()
         self.n_img_per_batch = n_img_per_batch
-        print(self.n_img_per_batch)
         
+
     def load_filter_bank(self,path ='./spatial_filters_224_by_224.mat'):
         '''Assumes a certain structure of filter file, returns a filter bank'''
         mat = scipy.io.loadmat(path)
@@ -184,8 +183,9 @@ class log_Gabor_convolution(torch.nn.Module): # checked
 
         filter_banks = torch.tensor(filter_banks)
         filter_banks = filter_banks.type(torch.FloatTensor)
-
-        return filter_banks
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        filter_banks.to(device)
+        return filter_banks.cuda()
 
     def forward(self, x):
         """
@@ -193,12 +193,13 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         with hard coded filters with shape [2*n_freq*n_orient, 1, imgsize, img_size]
         returns a with shape [n_imag_per_batch,2*n_freq*n_orient,imgsize+1, img_size+1]
         """
-        print(x.shape[0],print(self.n_img_per_batch))
+        #print(self.combined_filters.type(),'combined filters')
         assert self.n_img_per_batch == x.shape[0], "batch size needs to match the zeroth diension of x"
-        mean_padded_images = self.mean_padding(x)
-        a = F.conv2d(mean_padded_images, self.combined_filters)   
-        print(a.shape)
-        return a
+        x = self.mean_padding(x)
+        
+        x = F.conv2d(x, self.combined_filters)   
+        
+        return x
     
 
 # example module, skip for now. 
@@ -227,15 +228,16 @@ class Normalization(nn.Module):
         y = np.linspace(-1,1,l_y)
         f = np.linspace(-1,1,l_f)
         o = np.linspace(-1,1,l_o)
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         Gauss_x = 1/(np.sqrt(2.0*np.pi)*w_x)*np.exp(-(x**2)/(2*w_x**2))
-        self.Gauss_x = torch.from_numpy(Gauss_x.reshape([1,1,1,l_x])).float()
+        self.Gauss_x = torch.from_numpy(Gauss_x.reshape([1,1,1,l_x])).float().to(device)
         Gauss_y = 1/(np.sqrt(2.0*np.pi)*w_y)*np.exp(-(y**2)/(2*w_y**2))
-        self.Gauss_y = torch.from_numpy(Gauss_y.reshape([1,1,l_y,1])).float()
+        self.Gauss_y = torch.from_numpy(Gauss_y.reshape([1,1,l_y,1])).float().to(device)
         Gauss_o = 1/(np.sqrt(2.0*np.pi)*w_o)*np.exp(-(o**2)/(2*w_o**2))
-        self.Gauss_o = torch.tensor(Gauss_o.reshape([1,1,1,l_o])).type(torch.FloatTensor)
+        self.Gauss_o = torch.tensor(Gauss_o.reshape([1,1,1,l_o])).type(torch.FloatTensor).to(device)
         Gauss_f = 1/(np.sqrt(2.0*np.pi)*w_f)*np.exp(-(f**2)/(2*w_f**2))
-        self.Gauss_f = torch.tensor(Gauss_f.reshape([1,1,l_f,1])).type(torch.FloatTensor)
+        self.Gauss_f = torch.tensor(Gauss_f.reshape([1,1,l_f,1])).type(torch.FloatTensor).to(device)
         self.padxy = nn.ConstantPad2d((padxy_l,padxy_r,padxy_t,padxy_b), 0)
         self.padfo = nn.ConstantPad2d(pad_fo, 0) # frequency/orientation 2d pad
         self.padxy_l = padxy_l
@@ -258,32 +260,31 @@ class Normalization(nn.Module):
             Normalize x^p, correspond to equation (1)
             
             returns B with shape torch.Size([n_img_per_batch, n_freq, n_orient, n_phase, sz_after_convolution, sz_after_convolution])"""
-        assert x.shape[2] == self.sz
-        assert x.shape[3] == self.sz
-        assert x.shape[0] == self.n_img_per_batch
-        assert x.shape[1] == self.n_feature
+        #assert x.shape[2] == self.sz
+        #assert x.shape[3] == self.sz
+        #assert x.shape[0] == self.n_img_per_batch
+        #assert x.shape[1] == self.n_feature
         
+        
+        #imsize = x.shape[2] # assumes square image
         x_p = x**self.p
-        n_img_per_batch = x.shape[0]
-        n_feature = x.shape[1]
-        imsize = x.shape[2] # assumes square image
-        
         ## convolution in x
-        permuted = self.padxy(x_p).permute([1,0,2,3])
-        permute_concat = permuted.view([self.n_img_per_batch*self.n_feature,1,self.sz+self.padxy_t+self.padxy_b,self.sz+self.padxy_l+self.padxy_r])
-        conv_x = F.conv2d(permute_concat, self.Gauss_x) 
-        conv_y = F.conv2d(conv_x, self.Gauss_y)
-        conv_y_ = conv_y.view([n_feature,n_img_per_batch,self.convx_sz,self.convy_sz])
-        conv_y__ = conv_y_.view([self.n_freq,self.n_orient,self.n_phase,n_img_per_batch,1,self.convx_sz,self.convy_sz])
-        conv_y___ = conv_y__.permute([5,6,2,3,4,0,1])
-        conv_y____ = conv_y___.view([-1,1,self.n_freq,self.n_orient]) # [convx_sz*convy_sz*n_phase*n_img_per_batch,1,self.n_freq, self.n_orientation]
+        #print('self.n_img_per_batch',n_img_per_batch)
+        B = self.padxy(x_p).permute([1,0,2,3]).contiguous()
+        B = B.view([-1,1,self.sz+self.padxy_t+self.padxy_b,self.sz+self.padxy_l+self.padxy_r])
+        B = F.conv2d(B, self.Gauss_x) 
+        B = F.conv2d(B, self.Gauss_y).contiguous()
+        B = B.view([self.n_feature,self.n_img_per_batch,self.convx_sz,self.convy_sz])
+        B = B.view([self.n_freq,self.n_orient,self.n_phase,self.n_img_per_batch,1,self.convx_sz,self.convy_sz])
+        B = B.permute([5,6,2,3,4,0,1]).contiguous()
+        B = B.view([-1,1,self.n_freq,self.n_orient]) # [convx_sz*convy_sz*n_phase*n_img_per_batch,1,self.n_freq, self.n_orientation]
         ## convolution in f
-        conv_f = F.conv2d(self.padfo(conv_y____), self.Gauss_f)
-        conv_o = F.conv2d(conv_f, self.Gauss_o)
-        B = conv_o.view([self.convx_sz,self.convy_sz,self.n_phase,self.n_img_per_batch,self.n_freq,self.n_orient])
-        B_ = B.permute([3,4,5,2,0,1])
+        B = F.conv2d(self.padfo(B), self.Gauss_f)
+        B = F.conv2d(B, self.Gauss_o).contiguous()
+        B = B.view([self.convx_sz,self.convy_sz,self.n_phase,self.n_img_per_batch,self.n_freq,self.n_orient])
+        B = B.permute([3,4,5,2,0,1])
     
-        return B_
+        return B
 
 # example module, skip for now. 
 class Nonlinearity(nn.Module):
@@ -298,8 +299,8 @@ class Nonlinearity(nn.Module):
     def forward(self, A, B):
         """The shape of a and b needs to be the same
             [n_image_per_batch, n_freq,_n_orientation,n_phase, width_after_convolution, height_after_convolution]"""
-        assert A.shape ==B.shape, "The shape of a and b needs to be the same"
-        Addition = torch.add(torch.tensor(self.C**self.p),B) # Addition is ok, no nans 
+        #assert A.shape ==B.shape, "The shape of a and b needs to be the same"
+        #Addition = torch.add(torch.tensor(self.C**self.p),B) # Addition is ok, no nans 
         r = torch.div(torch.pow(A,(self.p+self.q)),torch.add(torch.tensor(self.C**self.p),B))        
         return r
 
@@ -309,7 +310,10 @@ def v1resnet18(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+   
     model = V1_ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    model.to(device)
     return model
 
 # check the log gabor convolution works or not
@@ -330,13 +334,13 @@ class V1_Imagenet_net(nn.Module):
 
     def forward(self, images):
         # [4,3,32,32]
-        a_ = self.logabor(images)
+        a_ = self.logabor(images).contiguous()
         B_normalization = self.normalization(a_) # the same till here
         A = a_.view([self.n_img_per_batch,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
-        R = self.nonlinearity(A,B_normalization)
-        R_reshape = R.view([self.n_img_per_batch,-1,self.conv_after_x,self.conv_after_y])
+        R = self.nonlinearity(A,B_normalization).contiguous()
+        R = R.view([self.n_img_per_batch,-1,self.conv_after_x,self.conv_after_y])
         # [n_img_per_batch, 192, 225, 225] 
 
-        return R_reshape
+        return R
 
 
