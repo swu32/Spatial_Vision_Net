@@ -18,6 +18,8 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+import torchvision
+
 import model as models
 
 model_names = sorted(name for name in models.__dict__
@@ -100,7 +102,7 @@ def main_worker(args):
         model = models.__dict__[args.arch](pretrained=True)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model = models.v1resnet18(n_img_per_batch = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32， num_classes=10)
+        model = models.v1resnet18(n_img_per_batch = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
 
 
 
@@ -133,8 +135,6 @@ def main_worker(args):
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
     # """TODO: add gray values"""
 
     # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
