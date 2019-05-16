@@ -9,13 +9,11 @@ from resnet import *
 import shutil
 
 
-
-
+start_epoch = 60
 batchsize = 4
-
-n_epoch = 150
-# resume = 'CIFAR10_baseline_model_best.pth.tar'
-resume = False
+n_epoch = 20
+resume = 'CIFAR10_baseline_model_best.pth.tar'
+#resume = False
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 transform = transforms.Compose(
     [transforms.ToTensor(),
@@ -42,7 +40,7 @@ net = resnet18()
 
 net.to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=0.1, momentum=0.9)
+optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
 
 
@@ -60,7 +58,27 @@ if resume:
     else:
         print("=> no checkpoint found at '{}'".format(resume))
 
+net.eval()
 
+correct = 0
+total = 0
+m = 0
+with torch.no_grad():
+    while m <= 10000:
+
+        for data in trainloader:
+            m = m + 1
+            images, labels = data
+            images, labels = images.to(device),labels.to(device)
+            outputs = net(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+
+
+this_accuracy = 100 * correct / total
+print('accuracy on the training set is: ', this_accuracy)
 # training network
 net.train()
 for epoch in range(start_epoch, start_epoch + n_epoch):  # loop over the dataset multiple times
@@ -86,7 +104,6 @@ for epoch in range(start_epoch, start_epoch + n_epoch):  # loop over the dataset
             print('[%d, %5d] loss: %.3f' %
                   (epoch + 1, i + 1, running_loss / 2000))
             running_loss = 0.0
-            
 
 print('Finished Training')
 
@@ -100,6 +117,7 @@ total = 0
 with torch.no_grad():
     for data in testloader:
         images, labels = data
+        images, labels = images.to(device),labels.to(device)
         outputs = net(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
@@ -120,8 +138,10 @@ class_total = list(0. for i in range(10))
 with torch.no_grad():
     for data in testloader:
         images, labels = data
+        images, labels = images.to(device),labels.to(device)
         outputs = net(images)
         _, predicted = torch.max(outputs, 1)
+        predicted.to(device)
         c = (predicted == labels).squeeze()
         for i in range(4):
             label = labels[i]
