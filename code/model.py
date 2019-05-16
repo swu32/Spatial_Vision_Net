@@ -116,8 +116,8 @@ class V1_ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-
-        x = self.avgpool(x)
+        # print(x.shape)
+        # x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
@@ -161,7 +161,7 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         self.n_img_per_batch = n_img_per_batch
         
 
-    def load_filter_bank(self,path ='./spatial_filters_224_by_224.mat'):
+    def load_filter_bank(self,path ='./spatial_filters.mat'):
         '''Assumes a certain structure of filter file, returns a filter bank'''
         mat = scipy.io.loadmat(path)
         spatial_filters_imag = mat['spatial_filters_imag'] 
@@ -184,8 +184,8 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         filter_banks = torch.tensor(filter_banks)
         filter_banks = filter_banks.type(torch.FloatTensor)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        filter_banks.to(device)
-        return filter_banks.cuda()
+        filter_banks = filter_banks.to(device)
+        return filter_banks
 
     def forward(self, x):
         """
@@ -238,7 +238,7 @@ class Normalization(nn.Module):
         self.Gauss_o = torch.tensor(Gauss_o.reshape([1,1,1,l_o])).type(torch.FloatTensor).to(device)
         Gauss_f = 1/(np.sqrt(2.0*np.pi)*w_f)*np.exp(-(f**2)/(2*w_f**2))
         self.Gauss_f = torch.tensor(Gauss_f.reshape([1,1,l_f,1])).type(torch.FloatTensor).to(device)
-        self.padxy = nn.ConstantPad2d((padxy_l,padxy_r,padxy_t,padxy_b), 0)
+        self.padxy = nn.ReflectionPad2d((padxy_l,padxy_r,padxy_t,padxy_b))
         self.padfo = nn.ConstantPad2d(pad_fo, 0) # frequency/orientation 2d pad
         self.padxy_l = padxy_l
         self.padxy_r = padxy_r
