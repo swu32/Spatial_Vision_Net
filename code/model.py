@@ -56,7 +56,7 @@ class BasicBlock(nn.Module):
 
 class V1_ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000, n_img_per_batch = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
+    def __init__(self, block, layers, low_freq = False, num_classes=1000, n_img_per_batch = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
         self.inplanes = 64
         super(V1_ResNet, self).__init__()
         self.n_img_per_batch = n_img_per_batch
@@ -64,8 +64,10 @@ class V1_ResNet(nn.Module):
         self.n_orient = n_orient
         self.n_phase = n_phase
         self.imsize = imsize
-
-        self.v1 = V1_Imagenet_net(n_img_per_batch = self.n_img_per_batch, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
+        if low_freq:
+            self.v1 = V1_Low_Frequency_net(n_img_per_batch = self.n_img_per_batch, n_freq  = 6, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
+        else:
+            self.v1 = V1_Imagenet_net(n_img_per_batch = self.n_img_per_batch, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
         self.conv1 = nn.Conv2d(n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -111,7 +113,7 @@ class V1_ResNet(nn.Module):
         x = self.bn1(x) 
         x = self.relu(x)
         x = self.maxpool(x)
-
+#        print('this is the shape before layer 1',x.shape) # [n_batch, 64, 9,9]
         x = self.layer1(x) # ?
         x = self.layer2(x)
         x = self.layer3(x)
@@ -150,18 +152,19 @@ class mean_padding(torch.nn.Module): # checked
 
 
 class log_Gabor_convolution(torch.nn.Module): # checked
-    def __init__(self, sz, n_img_per_batch):
+    def __init__(self, sz, n_img_per_batch, low_freq = False):
         """
         include declarations that can be prespeified. 
         """
         super(log_Gabor_convolution, self).__init__()
         pad_l = int(sz/2) # pad half of the image size. 
+        self.low_freq = low_freq
         self.mean_padding = mean_padding(pad_l, n_img_per_batch,sz)
-        self.combined_filters = self.load_filter_bank()
+        self.combined_filters = self.load_filter_bank(low_freq = self.low_freq)
         self.n_img_per_batch = n_img_per_batch
         
 
-    def load_filter_bank(self,path ='./spatial_filters.mat'):
+    def load_filter_bank(self,low_freq = False, path ='./spatial_filters.mat'):
         '''Assumes a certain structure of filter file, returns a filter bank'''
         mat = scipy.io.loadmat(path)
         spatial_filters_imag = mat['spatial_filters_imag'] 
@@ -171,18 +174,29 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         sz = spatial_filters_imag.shape[2] # Image size
         n_filters = n_freq*n_orient*2 # multiply by phase
         # combine real and imagary filters
-        filter_banks = np.zeros([n_filters,1,sz,sz]) # 1 is left for the gray value channel
+        if not low_freq:
+            s = 0
+            filter_banks = np.zeros([n_filters,1,sz,sz]) # 1 is left for the gray value channel
 
-        s = 0
-        for f in range(0,n_freq):
-            for o in range(0, n_orient):
-                filter_banks[s,0,:,:] = spatial_filters_real[f,o] - np.mean(spatial_filters_real[f,o])
-                s = s + 1
-                filter_banks[s,0,:,:] = spatial_filters_imag[f,o] - np.mean(spatial_filters_imag[f,o])
-                s = s + 1
+            for f in range(0,n_freq):
+                for o in range(0, n_orient):
+                    filter_banks[s,0,:,:] = spatial_filters_real[f,o] - np.mean(spatial_filters_real[f,o])
+                    s = s + 1
+                    filter_banks[s,0,:,:] = spatial_filters_imag[f,o] - np.mean(spatial_filters_imag[f,o])
+                    s = s + 1
+        else: 
+            s = 0
+            filter_banks = np.zeros([int(n_filters/2),1,sz,sz]) # 1 is left for the gray value channel
+            for f in range(int(n_freq/2),n_freq):
+                for o in range(0, n_orient):
+                    filter_banks[s,0,:,:] = spatial_filters_real[f,o] - np.mean(spatial_filters_real[f,o])
+                    s = s + 1
+                    filter_banks[s,0,:,:] = spatial_filters_imag[f,o] - np.mean(spatial_filters_imag[f,o])
+                    s = s + 1
 
-        filter_banks = torch.tensor(filter_banks)
-        filter_banks = filter_banks.type(torch.FloatTensor)
+
+        filter_banks = torch.FloatTensor(filter_banks)
+        # filter_banks = filter_banks.type(torch.FloatTensor)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         filter_banks = filter_banks.to(device)
         return filter_banks
@@ -196,8 +210,7 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         #print(self.combined_filters.type(),'combined filters')
         assert self.n_img_per_batch == x.shape[0], "batch size needs to match the zeroth diension of x"
         x = self.mean_padding(x)
-        
-        x = F.conv2d(x, self.combined_filters)   
+        x = F.conv2d(x, self.combined_filters)
         
         return x
     
@@ -206,7 +219,7 @@ class log_Gabor_convolution(torch.nn.Module): # checked
 class Normalization(nn.Module):
     """Calculated Normalized Layer, essential the coefficients b_i,
     apply convolution with 4d gaussian with a^p, where a is the result of convolution with customized filter."""
-    def __init__(self,p = 2,sz = 224,n_img_per_batch = 4, l_x = 32,l_y = 32,l_f = 3,l_o = 3,padxy_l = 16,padxy_r = 15,padxy_t = 16,padxy_b = 15,pad_fo = 1,w_x = 1,
+    def __init__(self, n_freq = 12, p = 2,sz = 224,n_img_per_batch = 4, l_x = 32,l_y = 32,l_f = 3,l_o = 3,padxy_l = 16,padxy_r = 15,padxy_t = 16,padxy_b = 15,pad_fo = 1,w_x = 1,
     w_y = 1,w_f = 1,w_o = 1):
         """
         p: power to multiply
@@ -244,7 +257,7 @@ class Normalization(nn.Module):
         self.padxy_r = padxy_r
         self.padxy_t = padxy_t
         self.padxy_b = padxy_b
-        self.n_freq = 12
+        self.n_freq = n_freq
         self.n_orient = 8
         self.n_phase = 2
         self.p = p
@@ -316,6 +329,12 @@ def v1resnet18(pretrained=False, **kwargs):
     model.to(device)
     return model
 
+def low_freq_resnet18(pretrained=False, **kwargs):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = V1_ResNet(BasicBlock, [2, 2, 2, 2], low_freq = True, **kwargs)
+    model.to(device)
+    return model
+
 # check the log gabor convolution works or not
 class V1_Imagenet_net(nn.Module):
     def __init__(self,n_img_per_batch = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
@@ -340,6 +359,38 @@ class V1_Imagenet_net(nn.Module):
         R = self.nonlinearity(A,B_normalization).contiguous()
         R = R.view([self.n_img_per_batch,-1,self.conv_after_x,self.conv_after_y])
         # [n_img_per_batch, 192, 225, 225] 
+
+        return R
+
+# Module only using low frequency filters
+class V1_Low_Frequency_net(nn.Module):
+    # only use half of the frequency for classification
+    def __init__(self, n_img_per_batch = 4, n_freq  = 6, n_orient = 8, n_phase = 2, imsize = 224):
+        super(V1_Low_Frequency_net,self).__init__()
+        #print('it is ok till here')
+        self.n_img_per_batch = n_img_per_batch
+        self.imsize = imsize
+        self.n_freq = n_freq
+        self.n_orient = n_orient
+        self.n_phase = n_phase
+        self.conv_after_x = self.imsize*2 - self.imsize + 1
+        self.conv_after_y = self.conv_after_x # assume square images
+        self.logabor = log_Gabor_convolution(imsize,self.n_img_per_batch, low_freq = True)
+        self.sz_after_filtering = self.imsize*2 - self.imsize + 1
+        self.normalization =  Normalization(n_freq = self.n_freq, sz = self.sz_after_filtering,n_img_per_batch = self.n_img_per_batch)
+        self.nonlinearity = Nonlinearity()
+
+    def forward(self, images):
+        # [4,3,32,32]
+        a_ = self.logabor(images).contiguous()
+        #print('shape of a ', a_.shape) # [4, 96, 33, 33 ]
+        B_normalization = self.normalization(a_) # the same till here
+        #print('shape of B', B_normalization.shape)
+
+        A = a_.view([self.n_img_per_batch,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
+        R = self.nonlinearity(A,B_normalization).contiguous()
+        R = R.view([self.n_img_per_batch,-1,self.conv_after_x,self.conv_after_y])
+        # [n_img_per_batch, 96, 225, 225] 
 
         return R
 
