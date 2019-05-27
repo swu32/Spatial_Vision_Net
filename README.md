@@ -8,7 +8,7 @@ This code package contains the code for training Spatial Vision Net and its vari
 
 Spatial Vision Net Integrates a front end of a computational spatial vision model with a backend of ResNet 18. 
 
-![Spatial-vision Net Architecture](./images/Spatial-vision_Net_architecture.png) 
+![Spatial-vision Net Architecture](Spatial-vision_Net_architecture.png) 
 
 
 
@@ -16,7 +16,7 @@ Spatial Vision Net Integrates a front end of a computational spatial vision mode
 
 To train a Spatial-vison Net, run: 
 
-```python
+```shell
 python3 CIFAR_normalization_training.py '' --epochs 80 --lr 0.1 -p 1000
 ```
 
