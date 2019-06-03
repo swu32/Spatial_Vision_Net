@@ -174,7 +174,7 @@ def main_worker(args):
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion, args)
 
-        # remember best acc@1 and save checkpoint
+        # remember best acc1 and save checkpoint
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
 
