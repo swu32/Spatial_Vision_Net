@@ -144,12 +144,12 @@ def main_worker(args):
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                             download=False, transform=transform)
 
-    train_loader = torch.utils.data.DataLoader(trainset, batch_size=4,
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=2)
 
     val_set = torchvision.datasets.CIFAR10(root='./data', train=False,
                                            download=False, transform=transform)
-    val_loader = torch.utils.data.DataLoader(val_set, batch_size=4,
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size,
                                              shuffle=False, num_workers=2)
 
     classes = ('plane', 'car', 'bird', 'cat',
@@ -275,7 +275,7 @@ def validate(val_loader, model, criterion, args):
 def save_checkpoint(state, is_best, filename='CIFAR10_baseline_checkpoint.pth.tar'):
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, 'CIFAR10_baseline_checkpoint.pth.tar')
+        shutil.copyfile(filename, 'CIFAR10_baseline_model_best.pth.tar')
 
 
 class AverageMeter(object):
