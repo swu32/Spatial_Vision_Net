@@ -102,7 +102,7 @@ def main_worker(args):
         model = models.__dict__[args.arch](pretrained=True)
     else:
         print("=> creating model '{}'".format(args.arch))
-        model = models.v1resnet18(n_img_per_batch = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
+        model = models.v1resnet18(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
 
 
 
@@ -150,12 +150,12 @@ def main_worker(args):
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                             download=False, transform=transform)
 
-    train_loader = torch.utils.data.DataLoader(trainset, batch_size=4,
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=2)
 
     val_set = torchvision.datasets.CIFAR10(root='./data', train=False,
                                            download=False, transform=transform)
-    val_loader = torch.utils.data.DataLoader(val_set, batch_size=4,
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size,
                                              shuffle=False, num_workers=2)
 
     classes = ('plane', 'car', 'bird', 'cat',
