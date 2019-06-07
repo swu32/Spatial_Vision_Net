@@ -165,7 +165,7 @@ class Spatial_Vision_Net_II(nn.Module):
     '''An upgrated version of spatial vision net, where boundary effect is alievated, positive and negative arctivities are 
         separated, and backend is changed to a simpler architecture. '''
 
-    def __init__(self, block, layers, num_classes=1000, batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
+    def __init__(self, num_classes=1000, batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
         self.inplanes = 64
         super(Spatial_Vision_Net_II, self).__init__()
         self.batchsize = batchsize
@@ -174,21 +174,23 @@ class Spatial_Vision_Net_II(nn.Module):
         self.n_phase = n_phase
         self.imsize = imsize
         self.v1 = SV_net(batchsize = self.batchsize, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
-        self.conv1 = nn.Conv2d(n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
+        self.conv1 = nn.Conv2d(2*n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, num_classes)
+        self.dropout = nn.Dropout(p = 0.5)
+        self.conv2 = nn.Conv2d(64, 16, 2)
+        self.fc1 = nn.Linear(16 * 3 * 3, 80)
+        self.fc2 = nn.Linear(80,60)
+        self.fc3 = nn.Linear(60, num_classes)
 
     def forward(self, x):
         x = self.v1(x) # (n_batch,n_feature, featureoutput, featureoutput)
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        #print('shape after conv1 is: ', self.conv1(x).shape)
+        x = self.pool(F.relu(self.conv1(self.dropout(x))))
+        x = self.pool(F.relu(self.conv2(self.dropout(x))))
+        #print(x.shape)
+        x = x.view(-1, 16 * 3 * 3)
+        x = F.relu(self.fc1(self.dropout(x)))
+        x = self.fc3(F.relu(self.fc2(x)))
 
         return x
 
@@ -278,7 +280,7 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         returns a with shape [n_imag_per_batch,2*n_freq*n_orient,imgsize+1, img_size+1]
         """
         #print(self.combined_filters.type(),'combined filters')
-        print('the shape of 0th dimension of x is:', x.shape[0])
+        # print('the shape of 0th dimension of x is:', x.shape[0])
         assert self.batchsize == x.shape[0], "batch size needs to match the zeroth dimension of x"
         x = self.mean_padding(x)
         x = F.conv2d(x, self.combined_filters)
@@ -460,7 +462,7 @@ class SV_net(nn.Module):
         # input: some filters output
         # output, positive and negative filter activities, to be processed separately
         sign = this_filter_o>0
-        sign = sign.type(torch.FloatTensor)
+        sign = sign.type(torch.cuda.FloatTensor)
         positive = this_filter_o*sign
         negative = -1*this_filter_o*(1-sign)
         return positive, negative # returns only positive values for competition/gain control
@@ -469,7 +471,7 @@ class SV_net(nn.Module):
         # separate positive and negative part of a_ for normalization
         # [4,3,32,32]
         a_ = self.logabor(images).contiguous()
-        a_pos, a_neg = sign_segragation(a_)
+        a_pos, a_neg =self.sign_segragation(a_)
 
         A_pos = a_pos.view([self.batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
         A_neg = a_neg.view([self.batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
@@ -619,7 +621,7 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        print([self.inplanes, planes, stride,downsample,norm_layer])
+        #print([self.inplanes, planes, stride,downsample,norm_layer])
 
         layers.append(block(self.inplanes, planes, stride, downsample, norm_layer))
  
