@@ -136,12 +136,16 @@ def main_worker(args):
         print("=> creating model '{}'".format(args.arch))
         print('batch size is ',args.batch_size)
         if this_net == "baseline_net":
+            print('Employing Vanilla ResNet')
             model = models.resnet18(num_classes=10)
         elif this_net == "SV_net_I":
+            print('Employing the first version of Spatial Vision Net')
             model = models.v1resnet18(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
         elif this_net == "SV_net_I_low_frequency":
+            print('Employing the low frequency version of Spatial Vision Net')
             model = models.low_freq_resnet18(batchsize = args.batch_size, n_freq  = 6, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
         elif this_net == "SV_net_II":
+            print('Employing simple net')
             model = models.simple_net(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
 
 # this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
