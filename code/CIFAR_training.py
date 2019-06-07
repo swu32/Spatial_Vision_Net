@@ -53,7 +53,6 @@ the purpose of overcoming the overfitting behavior of the resnet18 backend.
 
 
 
-
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
@@ -144,9 +143,9 @@ def main_worker(args):
         elif this_net == "SV_net_II":
             model = models.simple_net(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
 
+    record_file_name = 'performance_record'+ this_net + '.npy'
+
 # this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
-
-
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # model.to(device)
@@ -154,9 +153,10 @@ def main_worker(args):
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().to(device)
 
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
+    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
+    #                             momentum=args.momentum,
+    #                             weight_decay=args.weight_decay)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -178,25 +178,48 @@ def main_worker(args):
 
     # """TODO: add gray values"""
     if this_net == "baseline_net":
-        transform = transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))]) 
+        transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        # transform = transforms.Compose(
+        #     [transforms.ToTensor(),
+        #      transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))]) 
 
     else: 
-        transform = transforms.Compose(
-            [transforms.Grayscale(),transforms.ToTensor(),
-             transforms.Normalize((0.5,), (0.5,))]) 
+        transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.Grayscale(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.2,)),
+        ])
+        transform_test = transforms.Compose([
+        transforms.Grayscale(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.2,)),
+        ])
+
+        # transform = transforms.Compose(
+        #     [transforms.Grayscale(),transforms.ToTensor(),
+        #      transforms.Normalize((0.5,), (0.2,))]) 
 
 
 
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                            download=False, transform=transform)
+                                            download=False, transform=transform_train)
 
     train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=2)
 
     val_set = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                           download=False, transform=transform)
+                                           download=False, transform=transform_test)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size,
                                              shuffle=False, num_workers=2)
 
@@ -206,20 +229,30 @@ def main_worker(args):
     if args.evaluate:
         validate(val_loader, model, criterion, args)
         return
-
+    if args.start_epoch== 0: # initiate training
+        performance_record = {'epoch': [], 'train_acc': [], 'test_acc': []}  
+    else:
+        performance_record = np.load(record_file_name).item()
+  
+        
     for epoch in range(args.start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, args)
+        acc1_train = train(train_loader, model, criterion, optimizer, epoch, args)
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion, args)
+        performance_record['epoch'].append(epoch)
+        performance_record['train_acc'].append(acc1_train)
+        performance_record['test_acc'].append(acc1)
+
 
         # remember best acc1 and save checkpoint
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
 
+        np.save(record_file_name, performance_record) 
         save_checkpoint({
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
@@ -272,6 +305,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
         if i % args.print_freq == 0:
             progress.print(i)
+    return top1.avg
 
 
 def validate(val_loader, model, criterion, args):
@@ -333,7 +367,7 @@ def save_checkpoint(state, is_best):
     elif this_net == "SV_net_II":
         filename='CIFAR10_SV_net_II_checkpoint.pth.tar'
         best_file_name = 'CIFAR10_SV_net_II_best.pth.pth.tar'        
-         
+
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, best_file_name)
@@ -407,4 +441,6 @@ def accuracy(output, target, topk=(1,)):
 
 if __name__ == '__main__':
     main()
+
+
 
