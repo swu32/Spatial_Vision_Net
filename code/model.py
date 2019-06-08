@@ -1,4 +1,5 @@
 """This code is adapted from the resnet.py file in torchvision.model"""
+'adapted from https://github.com/kuangliu/pytorch-cifar/blob/master/models/resnet.py'
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -25,68 +26,26 @@ model_urls = {
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, norm_layer=None):
+    def __init__(self, in_planes, planes, stride=1):
         super(BasicBlock, self).__init__()
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
-        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
-        self.downsample = downsample
-        self.stride = stride
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
 
     def forward(self, x):
-        identity = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-
-        if self.downsample is not None:
-            identity = self.downsample(x)
-
-        out += identity
-        out = self.relu(out)
-
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
         return out
-
-# the previous basic block
-# class BasicBlock(nn.Module):
-#     expansion = 1
-
-#     def __init__(self, inplanes, planes, stride=1, downsample=None):
-#         super(BasicBlock, self).__init__()
-#         self.conv1 = conv3x3(inplanes, planes, stride)
-#         self.bn1 = nn.BatchNorm2d(planes)
-#         self.relu = nn.ReLU(inplace=True)
-#         self.conv2 = conv3x3(planes, planes)
-#         self.bn2 = nn.BatchNorm2d(planes)
-#         self.downsample = downsample
-#         self.stride = stride
-
-#     def forward(self, x):
-#         residual = x
-
-#         out = self.conv1(x)
-#         out = self.bn1(out)
-#         out = self.relu(out)
-
-#         out = self.conv2(out)
-#         out = self.bn2(out)
-
-#         if self.downsample is not None:
-#             residual = self.downsample(x)
-
-#         out += residual
-#         out = self.relu(out)
-
-#         return out
 
 
 class Spatial_Vision_Net(nn.Module):
@@ -575,10 +534,10 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-
-    def __init__(self, block, layers, num_classes=10):
+    def __init__(self, block, num_blocks, num_classes=10):
         super(ResNet, self).__init__()
         self.in_planes = 64
+
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
@@ -590,13 +549,11 @@ class ResNet(nn.Module):
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
         layers = []
-        #print([self.inplanes, planes, stride,downsample,norm_layer])
-        layers.append(block(self.inplanes, planes, stride, downsample, norm_layer))
-        self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, norm_layer=norm_layer))
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
-        
+
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
