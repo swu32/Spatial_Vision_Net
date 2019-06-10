@@ -24,7 +24,7 @@ import torchvision
 
 import model as models
 
-this_net = "baseline_net"
+this_net = "SV_net_II"
 # this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
 '''
 all the net architecture to choose from: 
