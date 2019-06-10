@@ -124,7 +124,7 @@ class Spatial_Vision_Net_II(nn.Module):
     '''An upgrated version of spatial vision net, where boundary effect is alievated, positive and negative arctivities are 
         separated, and backend is changed to a simpler architecture. '''
 
-    def __init__(self, num_classes=1000, batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
+    def __init__(self, block, num_blocks, num_classes=1000, batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
         self.inplanes = 64
         super(Spatial_Vision_Net_II, self).__init__()
         self.batchsize = batchsize
@@ -134,24 +134,41 @@ class Spatial_Vision_Net_II(nn.Module):
         self.imsize = imsize
         self.v1 = SV_net(batchsize = self.batchsize, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
         self.conv1 = nn.Conv2d(2*n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.dropout = nn.Dropout(p = 0.5)
-        self.conv2 = nn.Conv2d(64, 16, 2)
-        self.fc1 = nn.Linear(16 * 3 * 3, 80)
-        self.fc2 = nn.Linear(80,60)
-        self.fc3 = nn.Linear(60, num_classes)
+        self.relu = nn.ReLU(inplace=True)
+
+        # modify this part: 
+        self.in_planes = 64
+        self.bn1 = nn.BatchNorm2d(64)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        self.linear = nn.Linear(512*block.expansion, num_classes)
+
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1]*(num_blocks-1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
 
     def forward(self, x):
         x = self.v1(x) # (n_batch,n_feature, featureoutput, featureoutput)
         #print('shape after conv1 is: ', self.conv1(x).shape)
-        x = self.pool(F.relu(self.conv1(self.dropout(x))))
-        x = self.pool(F.relu(self.conv2(self.dropout(x))))
-        #print(x.shape)
-        x = x.view(-1, 16 * 3 * 3)
-        x = F.relu(self.fc1(self.dropout(x)))
-        x = self.fc3(F.relu(self.fc2(x)))
-
+        x = self.conv1(x) # (n_batch,64, convolution_output, convolution_output)
+        x = self.bn1(x) 
+        x = self.relu(x)
+        x = self.layer1(x) # ?
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = F.avg_pool2d(x, 3)
+        x = x.view(x.size(0), -1)
+        x = self.linear(x)
         return x
+
+
 
 
 class mean_padding(torch.nn.Module): # checked
@@ -370,7 +387,7 @@ def low_freq_resnet18(pretrained=False, **kwargs):
 def simple_net(pretrained=False, **kwargs):
     # a net with positive and negative signal separation and a simple backend. 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = Spatial_Vision_Net_II(**kwargs)
+    model = Spatial_Vision_Net_II(BasicBlock, [2, 2, 2, 2],**kwargs)
     model.to(device)
     return model
 
@@ -421,7 +438,11 @@ class SV_net(nn.Module):
         # input: some filters output
         # output, positive and negative filter activities, to be processed separately
         sign = this_filter_o>0
-        sign = sign.type(torch.cuda.FloatTensor)
+        if torch.cuda.is_available():
+            sign = sign.type(torch.cuda.FloatTensor)
+        else:
+            sign = sign.type(torch.FloatTensor)
+
         positive = this_filter_o*sign
         negative = -1*this_filter_o*(1-sign)
         return positive, negative # returns only positive values for competition/gain control
