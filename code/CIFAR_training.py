@@ -21,7 +21,7 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision
-
+import numpy as np
 import model as models
 
 this_net = "baseline_net"
