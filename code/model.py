@@ -23,29 +23,6 @@ model_urls = {
 
 
 
-class BasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, in_planes, planes, stride=1):
-        super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
-            )
-
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
-        out += self.shortcut(x)
-        out = F.relu(out)
-        return out
 
 
 class Spatial_Vision_Net(nn.Module):
@@ -120,6 +97,30 @@ class Spatial_Vision_Net(nn.Module):
         return x
 
 
+class BasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_planes, planes, stride=1):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride= stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+
 class Spatial_Vision_Net_II(nn.Module):
     '''An upgrated version of spatial vision net, where boundary effect is alievated, positive and negative arctivities are 
         separated, and backend is changed to a simpler architecture. '''
@@ -137,12 +138,12 @@ class Spatial_Vision_Net_II(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
         # modify this part: 
-        self.in_planes = 64
-        self.bn1 = nn.BatchNorm2d(64)
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        self.in_planes = 2*n_freq*n_orient*n_phase
+        self.bn1 = nn.BatchNorm2d(2*n_freq*n_orient*n_phase)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1) # 2
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2) # 2
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2) # 2
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2) # 2
         self.linear = nn.Linear(512*block.expansion, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride):
@@ -155,18 +156,22 @@ class Spatial_Vision_Net_II(nn.Module):
 
     def forward(self, x):
         x = self.v1(x) # (n_batch,n_feature, featureoutput, featureoutput)
-        #print('shape after conv1 is: ', self.conv1(x).shape)
-        x = self.conv1(x) # (n_batch,64, convolution_output, convolution_output)
-        x = self.bn1(x) 
-        x = self.relu(x)
-        x = self.layer1(x) # ?
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = F.avg_pool2d(x, 3)
-        x = x.view(x.size(0), -1)
+        x = self.bn1(x) # torch.Size([5, 384, 33, 33])
+        x = self.layer1(x) # ([5, 64, 33, 33])
+        x = self.layer2(x) # [5, 128, 17, 17]
+        x = self.layer3(x) # [5, 256, 9, 9]
+        x = self.layer4(x) # [5, 512, 5, 5]
+        x = F.avg_pool2d(x, 4) # ([5, 512, 1, 1])
+        x = x.view(x.size(0), -1) # torch.Size([5, 512])
         x = self.linear(x)
         return x
+
+#         shape after conv1 is:  torch.Size([5, 64, 17, 17])
+# torch.Size([5, 64, 17, 17])
+# torch.Size([5, 64, 17, 17])
+# torch.Size([5, 128, 9, 9])
+# torch.Size([5, 256, 5, 5])
+# torch.Size([5, 512, 3, 3])
 
 
 
