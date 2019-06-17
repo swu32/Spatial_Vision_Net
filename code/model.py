@@ -166,12 +166,37 @@ class Spatial_Vision_Net_II(nn.Module):
         x = self.linear(x)
         return x
 
-#         shape after conv1 is:  torch.Size([5, 64, 17, 17])
-# torch.Size([5, 64, 17, 17])
-# torch.Size([5, 64, 17, 17])
-# torch.Size([5, 128, 9, 9])
-# torch.Size([5, 256, 5, 5])
-# torch.Size([5, 512, 3, 3])
+
+class Spatial_Vision_Net_III(nn.Module):
+    '''An extremely simplified version of SV_net; used for MNIST'''
+
+    def __init__(self, num_classes=10, batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32):
+        super(Spatial_Vision_Net_III, self).__init__()
+        self.inplanes = 64
+        self.batchsize = batchsize
+        self.n_phase = n_phase
+        self.imsize = imsize
+        self.n_freq = n_freq
+        self.n_orient = n_orient
+        self.v1 = SV_net(batchsize = self.batchsize, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
+        self.conv1 = nn.Conv2d(2*n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.dropout = nn.Dropout(p = 0.5)
+        self.conv2 = nn.Conv2d(64, 16, 2)
+        self.fc1 = nn.Linear(16 * 3 * 3, 80)
+        self.fc2 = nn.Linear(80,60)
+        self.fc3 = nn.Linear(60, num_classes)
+
+
+    def forward(self, x):
+        x = self.v1(x) # (n_batch,n_feature, featureoutput, featureoutput)
+        x = self.pool(F.relu(self.conv1(self.dropout(x))))
+        x = self.pool(F.relu(self.conv2(self.dropout(x))))
+        x = x.view(-1, 16 * 3 * 3)
+        x = F.relu(self.fc1(self.dropout(x)))
+        x = self.fc3(F.relu(self.fc2(x)))
+        return x
+
 
 
 
@@ -260,12 +285,9 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         with hard coded filters with shape [2*n_freq*n_orient, 1, imgsize, img_size]
         returns a with shape [n_imag_per_batch,2*n_freq*n_orient,imgsize+1, img_size+1]
         """
-        #print(self.combined_filters.type(),'combined filters')
-        # print('the shape of 0th dimension of x is:', x.shape[0])
         assert self.batchsize == x.shape[0], "batch size needs to match the zeroth dimension of x"
         x = self.mean_padding(x)
         x = F.conv2d(x, self.combined_filters)
-        
         return x
     
 
@@ -336,7 +358,6 @@ class Normalization(nn.Module):
         #imsize = x.shape[2] # assumes square image
         x_p = x**self.p
         ## convolution in x
-        #print('self.n_img_per_batch',n_img_per_batch)
         B = self.padxy(x_p).permute([1,0,2,3]).contiguous()
         B = B.view([-1,1,self.sz+self.padxy_t+self.padxy_b,self.sz+self.padxy_l+self.padxy_r])
         B = F.conv2d(B, self.Gauss_x) 
@@ -396,6 +417,14 @@ def simple_net(pretrained=False, **kwargs):
     model.to(device)
     return model
 
+
+def simple_net_III(pretrained=False, **kwargs):
+    # designed for MNIST experiments
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = Spatial_Vision_Net_III(**kwargs)
+    model.to(device)
+    return model
+
 # check the log gabor convolution works or not
 class V1_Imagenet_net(nn.Module):
     def __init__(self,batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
@@ -437,7 +466,7 @@ class SV_net(nn.Module):
         self.conv_after_y = self.conv_after_x # assume square images
         self.logabor = log_Gabor_convolution(imsize,batchsize)
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
-        self.normalization =  Normalization(sz = self.sz_after_filtering,batchsize = batchsize)
+        self.normalization =  Normalization(sz = self.sz_after_filtering, batchsize = batchsize)
         self.nonlinearity = Nonlinearity()
     def sign_segragation(self,this_filter_o):
         # input: some filters output
