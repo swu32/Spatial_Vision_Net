@@ -21,7 +21,7 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision
-import numpy as np
+
 import model as models
 
 this_net = "SV_net_II"
@@ -30,7 +30,7 @@ this_net = "SV_net_II"
 all the net architecture to choose from: 
 
 "baseline_net": a resnet18 implemented on CIFAR10
-correspond to
+correspond to.
 CIFAR10_baseline_model_best.pth &
 CIFAR10_baseline_checkpoint.pth 
 
@@ -204,10 +204,11 @@ def main_worker(args):
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.2,)),
         ])
+
         transform_test = transforms.Compose([
         transforms.Grayscale(),
         transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.2,)),
+        transforms.Normalize((0.5,), (0.2,))
         ])
 
         # transform = transforms.Compose(
@@ -367,10 +368,10 @@ def save_checkpoint(state, is_best):
         best_file_name = 'CIFAR10_normalization_model_best.pth.tar'  
     elif this_net == "SV_net_I_low_frequency":
         filename='CIFAR10_low_freq_model_checkpoint.pth.tar'
-        best_file_name = 'CIFAR10_low_freq_model_best.pth.pth.tar'  
+        best_file_name = 'CIFAR10_low_freq_model_best.pth.tar'  
     elif this_net == "SV_net_II":
         filename='CIFAR10_SV_net_II_checkpoint.pth.tar'
-        best_file_name = 'CIFAR10_SV_net_II_best.pth.pth.tar'        
+        best_file_name = 'CIFAR10_SV_net_II_best.pth.tar'        
 
     torch.save(state, filename)
     if is_best:
