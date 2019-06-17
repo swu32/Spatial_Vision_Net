@@ -147,7 +147,7 @@ def main_worker(args):
             print('Employing simple net')
             model = models.simple_net(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
 
-    record_file_name = 'performance_record'+ this_net + '.npy'
+    record_file_name = 'performance_record'+ this_net + '0612.npy'
 
 # this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
 
