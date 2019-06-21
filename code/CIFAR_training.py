@@ -47,6 +47,14 @@ CIFAR10_low_freq_checkpoint.pth &
 "SV_net_II": A simplified and a more updated version of SV_net_I. The spatial vision frontend has filter responses 
 separated between positive and negative, and the spatial vision backend has similar structure instead of Resnet18, for 
 the purpose of overcoming the overfitting behavior of the resnet18 backend. 
+SV_net_II_model_best.pth.tar &
+SV_net_II_model_checkpoint.pth.tar
+
+
+
+"SV_net_II_low_frequency": 
+SV_net_II_low_frequency_model_best.pth.tar &
+SV_net_II_low_frequency_model_checkpoint.pth.tar
 
 
 '''
@@ -146,8 +154,12 @@ def main_worker(args):
         elif this_net == "SV_net_II":
             print('Employing simple net')
             model = models.simple_net(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
+        elif this_net == "SV_net_II_low_frequency":
+            print('Employing simple net with low frequency')
+            model = models.low_freq_simple_net(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
 
-    record_file_name = 'performance_record'+ this_net + '0612.npy'
+
+    record_file_name = 'performance_record'+ this_net + '0621.npy'
 
 # this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
 
@@ -372,6 +384,10 @@ def save_checkpoint(state, is_best):
     elif this_net == "SV_net_II":
         filename='CIFAR10_SV_net_II_checkpoint.pth.tar'
         best_file_name = 'CIFAR10_SV_net_II_best.pth.tar'        
+    elif this_net == "SV_net_II_low_frequency":
+        filename='CIFAR10_SV_net_II_low_frequency_checkpoint.pth.tar'
+        best_file_name = 'CIFAR10_SV_net_II_low_frequency_best.pth.tar'        
+
 
     torch.save(state, filename)
     if is_best:
