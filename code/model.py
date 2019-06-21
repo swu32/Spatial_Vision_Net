@@ -125,7 +125,7 @@ class Spatial_Vision_Net_II(nn.Module):
     '''An upgrated version of spatial vision net, where boundary effect is alievated, positive and negative arctivities are 
         separated, and backend is changed to a simpler architecture. '''
 
-    def __init__(self, block, num_blocks, num_classes=1000, batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
+    def __init__(self, block, num_blocks, num_classes=1000, batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224,low_freq = False):
         self.inplanes = 64
         super(Spatial_Vision_Net_II, self).__init__()
         self.batchsize = batchsize
@@ -133,10 +133,15 @@ class Spatial_Vision_Net_II(nn.Module):
         self.n_orient = n_orient
         self.n_phase = n_phase
         self.imsize = imsize
-        self.v1 = SV_net(batchsize = self.batchsize, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
-        self.conv1 = nn.Conv2d(2*n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
-        self.relu = nn.ReLU(inplace=True)
 
+        if low_freq: # only employs the lower half of the spatial frequency filters, 
+            self.v1 = SV_net(batchsize = self.batchsize, n_freq  = int(self.n_freq/2), n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize, low_freq = True)
+            self.conv1 = nn.Conv2d(2*int(self.n_freq/2)*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
+        else:
+            self.v1 = SV_net(batchsize = self.batchsize, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
+            self.conv1 = nn.Conv2d(2*n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
+
+        self.relu = nn.ReLU(inplace=True)
         # modify this part: 
         self.in_planes = 2*n_freq*n_orient*n_phase
         self.bn1 = nn.BatchNorm2d(2*n_freq*n_orient*n_phase)
@@ -417,6 +422,12 @@ def simple_net(pretrained=False, **kwargs):
     model.to(device)
     return model
 
+def low_freq_simple_net(pretrained=False, **kwargs):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = Spatial_Vision_Net_II(BasicBlock, [2, 2, 2, 2], low_freq = True, **kwargs)
+    model.to(device)
+    return model
+
 
 def simple_net_III(pretrained=False, **kwargs):
     # designed for MNIST experiments
@@ -455,7 +466,7 @@ class V1_Imagenet_net(nn.Module):
 class SV_net(nn.Module):
     '''implement the spatial vision subcomponent of the module
     separate positive and negative subpart of the response before convolution'''
-    def __init__(self,batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224):
+    def __init__(self,batchsize = 4, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224, low_freq = False):
         super(SV_net, self).__init__()
         self.batchsize = batchsize
         self.imsize = imsize
@@ -464,7 +475,11 @@ class SV_net(nn.Module):
         self.n_phase = n_phase
         self.conv_after_x = self.imsize*2 - self.imsize + 1
         self.conv_after_y = self.conv_after_x # assume square images
-        self.logabor = log_Gabor_convolution(imsize,batchsize)
+        if low_freq:    
+            self.logabor = log_Gabor_convolution(imsize,batchsize, low_freq = True)
+        else:
+            self.logabor = log_Gabor_convolution(imsize,batchsize)
+
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
         self.normalization =  Normalization(sz = self.sz_after_filtering, batchsize = batchsize)
         self.nonlinearity = Nonlinearity()
@@ -503,6 +518,7 @@ class SV_net(nn.Module):
 
         return R
 
+
 # Module only using low frequency filters
 class V1_Low_Frequency_net(nn.Module):
     # only use half of the frequency for classification
@@ -530,7 +546,6 @@ class V1_Low_Frequency_net(nn.Module):
         R = self.nonlinearity(A,B_normalization).contiguous()
         R = R.view([self.batchsize,-1,self.conv_after_x,self.conv_after_y])
         # [n_img_per_batch, 96, 225, 225] 
-
         return R
 
 
