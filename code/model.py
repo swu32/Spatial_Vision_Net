@@ -137,14 +137,15 @@ class Spatial_Vision_Net_II(nn.Module):
         if low_freq: # only employs the lower half of the spatial frequency filters, 
             self.v1 = SV_net(batchsize = self.batchsize, n_freq  = int(self.n_freq/2), n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize, low_freq = True)
             self.conv1 = nn.Conv2d(2*int(self.n_freq/2)*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
+            self.n_freq = int(self.n_freq/2)
         else:
             self.v1 = SV_net(batchsize = self.batchsize, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
             self.conv1 = nn.Conv2d(2*n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
 
         self.relu = nn.ReLU(inplace=True)
         # modify this part: 
-        self.in_planes = 2*n_freq*n_orient*n_phase
-        self.bn1 = nn.BatchNorm2d(2*n_freq*n_orient*n_phase)
+        self.in_planes = 2*self.n_freq*n_orient*n_phase
+        self.bn1 = nn.BatchNorm2d(2*self.n_freq*n_orient*n_phase)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1) # 2
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2) # 2
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2) # 2
@@ -472,6 +473,7 @@ class SV_net(nn.Module):
         self.batchsize = batchsize
         self.imsize = imsize
         self.n_freq = n_freq
+        #print('self.n_freq',self.n_freq)
         self.n_orient = n_orient
         self.n_phase = n_phase
         self.conv_after_x = self.imsize*2 - self.imsize + 1
@@ -482,7 +484,7 @@ class SV_net(nn.Module):
             self.logabor = log_Gabor_convolution(imsize,batchsize)
 
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
-        self.normalization =  Normalization(sz = self.sz_after_filtering, batchsize = batchsize)
+        self.normalization =  Normalization(n_freq = self.n_freq, sz = self.sz_after_filtering, batchsize = batchsize)
         self.nonlinearity = Nonlinearity()
     def sign_segragation(self,this_filter_o):
         # input: some filters output
@@ -501,8 +503,9 @@ class SV_net(nn.Module):
         # separate positive and negative part of a_ for normalization
         # [4,3,32,32]
         a_ = self.logabor(images).contiguous()
+        #print("shape of a_", a_.shape)
         a_pos, a_neg =self.sign_segragation(a_)
-
+        #print('shape of signed ',a_pos.shape)
         A_pos = a_pos.view([self.batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
         A_neg = a_neg.view([self.batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
 
