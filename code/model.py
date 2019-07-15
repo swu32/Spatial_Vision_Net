@@ -184,14 +184,12 @@ class Spatial_Vision_Net_III(nn.Module):
         self.imsize = imsize
         self.n_freq = n_freq
         self.n_orient = n_orient
-        self.v1 = SV_net(batchsize = self.batchsize, n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
-        self.conv1 = nn.Conv2d(2*n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
+        self.v1 = SV_net(batchsize = self.batchsize, n_freq  = int(self.n_freq/2), n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize, low_freq = True)
+        self.conv1 = nn.Conv2d(n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
         self.pool = nn.MaxPool2d(2, 2)
         self.dropout = nn.Dropout(p = 0.5)
         self.conv2 = nn.Conv2d(64, 16, 2)
         self.fc1 = nn.Linear(16 * 3 * 3, num_classes)
-#        self.fc2 = nn.Linear(80,60)
-#        self.fc3 = nn.Linear(60, num_classes)
 
 
     def forward(self, x):
@@ -200,8 +198,6 @@ class Spatial_Vision_Net_III(nn.Module):
         x = self.pool(F.relu(self.conv2(self.dropout(x))))
         x = x.view(-1, 16 * 3 * 3)
         x = self.fc1(self.dropout(x))
-#        x = F.relu(self.fc1(self.dropout(x)))
-#        x = self.fc3(F.relu(self.fc2(x)))
         return x
 
 
