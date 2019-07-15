@@ -445,7 +445,7 @@ class V1_Imagenet_net(nn.Module):
         self.n_phase = n_phase
         self.conv_after_x = self.imsize*2 - self.imsize + 1
         self.conv_after_y = self.conv_after_x # assume square images
-        self.logabor = log_Gabor_convolution(imsize,batchsize)
+        self.logabor = log_Gabor_convolution(sz = imsize,batchsize = batchsize)
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
         self.normalization =  Normalization(sz = self.sz_after_filtering,batchsize = batchsize)
         self.nonlinearity = Nonlinearity()
@@ -475,9 +475,9 @@ class SV_net(nn.Module):
         self.conv_after_x = self.imsize*2 - self.imsize + 1
         self.conv_after_y = self.conv_after_x # assume square images
         if low_freq:    
-            self.logabor = log_Gabor_convolution(imsize,batchsize, low_freq = True)
+            self.logabor = log_Gabor_convolution(sz = imsize,batchsize = batchsize, low_freq = True)
         else:
-            self.logabor = log_Gabor_convolution(imsize,batchsize)
+            self.logabor = log_Gabor_convolution(sz = imsize,batchsize = batchsize)
 
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
         self.normalization =  Normalization(n_freq = self.n_freq, sz = self.sz_after_filtering, batchsize = batchsize)
@@ -532,7 +532,7 @@ class V1_Low_Frequency_net(nn.Module):
         self.n_phase = n_phase
         self.conv_after_x = self.imsize*2 - self.imsize + 1
         self.conv_after_y = self.conv_after_x # assume square images
-        self.logabor = log_Gabor_convolution(imsize,self.batchsize, low_freq = True)
+        self.logabor = log_Gabor_convolution(sz = imsize,batchsize = self.batchsize, low_freq = True)
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
         self.normalization =  Normalization(n_freq = self.n_freq, sz = self.sz_after_filtering,batchsize = self.batchsize)
         self.nonlinearity = Nonlinearity()
