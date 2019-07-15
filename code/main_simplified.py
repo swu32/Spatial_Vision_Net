@@ -81,12 +81,9 @@ def main():
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
 
-
     args.world_size = 1  
 
-
     ngpus_per_node = torch.cuda.device_count()
-
     # Simply call main_worker function
     main_worker(args)
 
@@ -172,7 +169,7 @@ def main_worker(args):
             transforms.ToTensor(),
             transforms.Normalize((0.5,), (0.5,))
         ])),
-        batch_size=args.batch_size, shuffle=False,
+        batch_size=args.batch_size, shuffle=False
         num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
