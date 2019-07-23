@@ -147,16 +147,16 @@ def main_worker(args):
             model = models.resnet18(num_classes=10)
         elif this_net == "SV_net_I":
             print('Employing the first version of Spatial Vision Net')
-            model = models.v1resnet18(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2)
+            model = models.v1resnet18(n_freq  = 12, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
         elif this_net == "SV_net_I_low_frequency":
             print('Employing the low frequency version of Spatial Vision Net')
-            model = models.low_freq_resnet18(batchsize = args.batch_size, n_freq  = 6, n_orient = 8, n_phase = 2)
+            model = models.low_freq_resnet18(n_freq  = 6, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
         elif this_net == "SV_net_II":  # make sure the simplenet is working for pilot training. 
             print('Employing simple net')
-            model = models.simple_net(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2)
+            model = models.simple_net(n_freq  = 12, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
         elif this_net == "SV_net_II_low_frequency":
             print('Employing simple net with low frequency')
-            model = models.low_freq_simple_net(batchsize = args.batch_size, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32,num_classes=10)
+            model = models.low_freq_simple_net(n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224,num_classes=1000)
 
 
     record_file_name = 'ImageNet_performance_record'+ this_net + '0715.npy'
