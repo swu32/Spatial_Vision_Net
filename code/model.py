@@ -94,7 +94,7 @@ class SpatialVisionNet(nn.Module):
         self.n_phase = n_phase
         self.imsize = imsize
         if low_freq: # only employs the lower half of the spatial frequency filters, 
-            self.v1 = V1ImagenetNet(n_freq =int(self.n_freq/2), n_orient=self.n_orient, n_phase=self.n_phase, im_size=self.imsize, low_freq=True)
+            self.v1 = V1ImagenetNet(n_freq=int(self.n_freq/2), n_orient=self.n_orient, n_phase=self.n_phase, im_size=self.imsize, low_freq=True)
             self.conv1 = nn.Conv2d(int(self.n_freq/2)*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3, bias=False)
         else:
             self.v1 = V1ImagenetNet(n_freq=self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, im_size=self.imsize)
@@ -152,24 +152,24 @@ class SpatialVisionNet(nn.Module):
         return x
 
 
-class Spatial_Vision_Net_II(nn.Module):
+class SpatialVisionNetII(nn.Module):
     '''An upgrated version of spatial vision net, where boundary effect is alievated, positive and negative arctivities are 
         separated, and backend is changed to a simpler architecture. '''
 
-    def __init__(self, block, num_blocks, num_classes=1000, n_freq=12, n_orient=8, n_phase=2, imsize=224,low_freq=False):
+    def __init__(self, block, num_blocks, num_classes=1000, n_freq=12, n_orient=8, n_phase=2, imsize=128, low_freq=False):
         self.inplanes = 64
-        super(Spatial_Vision_Net_II, self).__init__()
+        super(SpatialVisionNetII, self).__init__()
         self.n_freq = n_freq
         self.n_orient = n_orient
         self.n_phase = n_phase
         self.imsize = imsize
 
         if low_freq: # only employs the lower half of the spatial frequency filters, 
-            self.v1 = SV_net(n_freq  = int(self.n_freq/2), n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize, low_freq = True)
+            self.v1 = SvNet(n_freq=int(self.n_freq/2), n_orient=self.n_orient, n_phase=self.n_phase, imsize =self.imsize, low_freq=True)
             self.conv1 = nn.Conv2d(2*int(self.n_freq/2)*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
             self.n_freq = int(self.n_freq/2)
         else:
-            self.v1 = SV_net(n_freq  = self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize)
+            self.v1 = SvNet(n_freq=self.n_freq, n_orient=self.n_orient, n_phase=self.n_phase, imsize=self.imsize)
             self.conv1 = nn.Conv2d(2*n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
 
         self.relu = nn.ReLU(inplace=True)
@@ -293,64 +293,64 @@ class Spatial_Vision_Net_III(nn.Module):
         return x
 
 
+class MeanPadding(torch.nn.Module):
+    # TODO: this function is intensive on memory, check if this is the most efficient way of doing mean padding. possibly use tensor.cat
+    """
+    pad each image with the mean of the pixel value, with their specified parameters,
 
-
-
-class mean_padding(torch.nn.Module): # checked
+    pad_l: padding length, this function assumes a squared equal padding on all sides of image
+    sz: size of image, this function assumes a square image.
+    """
     def __init__(self,pad_l,sz):
-        """
-        padd each image with their mean, with their specified parameters,
-        
-        pad_l: padding length, this function assumes a squared equal padding on all sides of image 
-        sz: size of image, this function assumes a square image. 
-        """
-        super(mean_padding, self).__init__()
+        super(MeanPadding, self).__init__()
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.padding = torch.ones([1,1,sz+pad_l*2,sz+pad_l*2]).to(device)
+        self.padding = torch.ones([1, 1, sz+pad_l*2, sz+pad_l*2]).to(device)
         self.pad_l = pad_l
+        self.mean = torch.mean()
+        self.mul = torch.mul()
 
     def forward(self, x):
-        """
-        """
-        n_img_per_batch = x.shape[0] #this has to be true
+        # n_img_per_batch = x.shape[0]  # this has to be true
         # print('n image per batch is ', n_img_per_batch)
         # print(x.shape[2],x.shape[3])
-        assert x.shape[2] == x.shape[3],'The image to be mean padded should be square sized'
-        mean_batch = torch.mean(torch.mean(x,3),2).view([n_img_per_batch,1,1,1])
-        mean_batch = torch.mul(self.padding,mean_batch)
-        mean_batch[:,:,self.pad_l:-self.pad_l,self.pad_l:-self.pad_l] = x
-        
+        assert x.shape[2] == x.shape[3], 'Warning: The image to be mean padded should be square sized'
+        mean_batch = self.mean(self.mean(x, 3), 2).view([-1, 1, 1, 1])
+        mean_batch = self.mul(self.padding, mean_batch)
+        mean_batch[:, :, self.pad_l:-self.pad_l, self.pad_l:-self.pad_l] = x
         return mean_batch
 
 
-class log_Gabor_convolution(torch.nn.Module): # checked
-    def __init__(self, sz=32, low_freq = False):
+class LogGaborConvolution(torch.nn.Module):  # checked
+
+    def __init__(self, sz=32, n_freq=12, n_orient=8, n_phase=2, low_freq=False):
         """
         low_freq: only use half of the filters starting with the lowest frequency
         """
-        super(log_Gabor_convolution, self).__init__()
-        pad_l = int(sz/2) # pad half of the image size. 
+        super(LogGaborConvolution, self).__init__()
+        pad_l = int(sz/2)  # pad half of the image size.
         self.low_freq = low_freq
-        self.mean_padding = mean_padding(pad_l,sz)
+        self.mean_padding = MeanPadding(pad_l, sz)  # padded with the mean of the image,
         self.combined_filters = self.load_filter_bank(low_freq=self.low_freq, sz=sz)
         # self.batchsize = batchsize
-        
 
-    def load_filter_bank(self,low_freq = False, sz = 32):
+    def load_filter_bank(self, low_freq=False, sz=32):
         """Assumes a certain structure of filter file, returns a filter bank"""
         if sz == 32:  # load filter bank for 32 by 32 images
             path = './spatial_filters.mat'
+        elif sz == 128:
+            # TODO: generate filter banks with 128 by 128 pixels from MATLAB.
+            pass
         else:  # load filter bank for 224 by 224 images
             path = './spatial_filters_224_by_224.mat'
-
+        # TODO: MAYBE TAKE THIS OUT OF THE EXECUTION,
         mat = scipy.io.loadmat(path)
-        spatial_filters_imag = mat['spatial_filters_imag'] 
-        spatial_filters_real = mat['spatial_filters_real']
+        spatial_filters_imag = torch.tensor(mat['spatial_filters_imag'])
+        spatial_filters_real = torch.tensor(mat['spatial_filters_real'])
         n_freq = spatial_filters_imag.shape[0]
         n_orient = spatial_filters_imag.shape[1]
-        sz = spatial_filters_imag.shape[2] # Image size
-        n_filters = n_freq*n_orient*2 # multiply by phase
-        # combine real and imagary filters
+        sz = spatial_filters_imag.shape[2]  # Image size
+        n_filters = n_freq*n_orient*2  # multiply by phase
+        # combine real and imaginary filters
         if not low_freq:
             banksize = n_filters
             start = 0
@@ -359,14 +359,15 @@ class log_Gabor_convolution(torch.nn.Module): # checked
             start = int(n_freq/2)
 
         # modified code: 
-        filter_banks = np.zeros([banksize,1,sz,sz]) # 1 is left for the gray value channel
+        filter_banks = torch.zeros([banksize, 1, sz, sz])  # 1 is left for the gray value channel
         s = 0
+        # TODO: make this more elegant.
 
         for f in range(start,n_freq):
             for o in range(0, n_orient):
-                filter_banks[s,0,:,:] = spatial_filters_real[f,o] - np.mean(spatial_filters_real[f,o])
+                filter_banks[s, 0, :, :] = spatial_filters_real[f, o] - np.mean(spatial_filters_real[f, o])
                 s = s + 1
-                filter_banks[s,0,:,:] = spatial_filters_imag[f,o] - np.mean(spatial_filters_imag[f,o])
+                filter_banks[s, 0, :, :] = spatial_filters_imag[f, o] - np.mean(spatial_filters_imag[f, o])
                 s = s + 1
 
         filter_banks = torch.FloatTensor(filter_banks)
@@ -471,19 +472,23 @@ class Normalization(nn.Module):
 # example module, skip for now. 
 class Nonlinearity(nn.Module):
     """Calculated r_i"""
-    def __init__(self,p = 2.0,  q = 1, C = 0.25):
+    def __init__(self, p=2.0,  q=1, C=0.25):
         """"""
         super(Nonlinearity, self).__init__()
         self.p = p
         self.q = q
         self.C = C
+        self.div = torch.div()
+        self.pow = torch.pow()
+        self.add = torch.add()
+
 
     def forward(self, A, B):
         """The shape of a and b needs to be the same
             [n_image_per_batch, n_freq,_n_orientation,n_phase, width_after_convolution, height_after_convolution]"""
         #assert A.shape ==B.shape, "The shape of a and b needs to be the same"
         #Addition = torch.add(torch.tensor(self.C**self.p),B) # Addition is ok, no nans 
-        r = torch.div(torch.pow(A,(self.p+self.q)),torch.add(torch.tensor(self.C**self.p),B))        
+        r = self.div(self.pow(A, (self.p+self.q)), self.add(torch.tensor(self.C**self.p), B))
         return r
 
 
@@ -498,46 +503,48 @@ class V1ImagenetNet(nn.Module):
         self.conv_after_x = self.imsize*2 - self.im_size + 1
         self.conv_after_y = self.conv_after_x  # assume square images
         if low_freq:
-            self.log_gabor = log_Gabor_convolution(sz=self.im_size, low_freq=True)
+            self.log_gabor = LogGaborConvolution(sz=self.im_size, n_freq=self.n_freq, n_orient=self.n_orient, n_phase=self.n_phase, low_freq=True)
         else:
-            self.log_gabor = log_Gabor_convolution(sz=self.im_size)
+            self.log_gabor = LogGaborConvolution(sz=self.im_size, n_freq=self.n_freq, n_orient=self.n_orient, n_phase=self.n_phase)
         self.sz_after_filtering = self.imsize*2 - self.im_size + 1
         self.normalization = Normalization(sz=self.sz_after_filtering)
         self.nonlinearity = Nonlinearity()
 
-    def forward(self, images):
-        # batch_size = images.shape[0]
-        a_ = self.log_gabor(images).contiguous()
-        B_normalization = self.normalization(a_) # the same till here
-        A = a_.view([batch_size,self.n_freq, self.n_orient, self.n_phase, self.conv_after_x, self.conv_after_y])
-        R = self.nonlinearity(A,B_normalization).contiguous()
-        R = R.view([batch_size, -1, self.conv_after_x, self.conv_after_y])
-        return R
+    def forward(self, a):
+        batch_size = a.shape[0]
+        a = self.log_gabor(a).contiguous()
+        # B_normalization = self.normalization(a_) # the same till here
+        # A = a_.view([batch_size,self.n_freq, self.n_orient, self.n_phase, self.conv_after_x, self.conv_after_y])
+        a = self.nonlinearity(a, self.normalization(a)).contiguous()
+        a = a.view([batch_size, -1, self.conv_after_x, self.conv_after_y])
+        return a
 
-class SV_net(nn.Module):
-    '''implement the spatial vision subcomponent of the module
-    separate positive and negative subpart of the response before convolution'''
-    def __init__(self,n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224, low_freq = False):
-        super(SV_net, self).__init__()
+class SvNet(nn.Module):
+    """implement the spatial vision subcomponent of the module
+    separate positive and negative subpart of the response before convolution"""
+    def __init__(self, n_freq=12, n_orient=8, n_phase=2, imsize=224, low_freq=False):
+        super(SvNet, self).__init__()
         self.imsize = imsize
         self.n_freq = n_freq
-        #print('self.n_freq',self.n_freq)
         self.n_orient = n_orient
         self.n_phase = n_phase
         self.conv_after_x = self.imsize*2 - self.imsize + 1
-        self.conv_after_y = self.conv_after_x # assume square images
+        self.conv_after_y = self.conv_after_x  # assume square images
         if low_freq:    
-            self.logabor = log_Gabor_convolution(sz = imsize, low_freq = True)
+            self.logabor = LogGaborConvolution(sz=self.imsize, n_freq=self.n_freq,
+                                               n_orient=self.n_orient, n_phase=self.n_phase, low_freq=True)
         else:
-            self.logabor = log_Gabor_convolution(sz = imsize)
+            self.logabor = LogGaborConvolution(sz=self.imsize, n_freq=self.n_freq,
+                                               n_orient=self.n_orient, n_phase=self.n_phase)
 
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
-        self.normalization =  Normalization(n_freq = self.n_freq, sz = self.sz_after_filtering)
+        self.normalization = Normalization(n_freq=self.n_freq, sz=self.sz_after_filtering)
         self.nonlinearity = Nonlinearity()
+
     def sign_segragation(self,this_filter_o):
         # input: some filters output
         # output, positive and negative filter activities, to be processed separately
-        sign = this_filter_o>0
+        sign = this_filter_o > 0
         if torch.cuda.is_available():
             sign = sign.type(torch.cuda.FloatTensor)
         else:
@@ -549,25 +556,19 @@ class SV_net(nn.Module):
 
     def forward(self, images):
         # separate positive and negative part of a_ for normalization
-        # [4,3,32,32]
         batchsize = images.shape[0]
-
         a_ = self.logabor(images).contiguous()
-        #print("shape of a_", a_.shape)
         a_pos, a_neg =self.sign_segragation(a_)
-        #print('shape of signed ',a_pos.shape)
-        A_pos = a_pos.view([batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
-        A_neg = a_neg.view([batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
+        # B_normalization_pos = self.normalization(a_pos) # the same till here
+        # B_normalization_neg = self.normalization(a_neg) # the same till here
+        a_pos = a_pos.view([batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
+        a_neg = a_neg.view([batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
+        a_pos = self.nonlinearity(a_pos,self.normalization(a_pos)).contiguous()
+        a_neg = self.nonlinearity(a_neg,self.normalization(a_neg)).contiguous()
 
-        B_normalization_pos = self.normalization(a_pos) # the same till here
-        B_normalization_neg = self.normalization(a_neg) # the same till here
-
-        R_pos = self.nonlinearity(A_pos,B_normalization_pos).contiguous()
-        R_neg = self.nonlinearity(A_neg,B_normalization_neg).contiguous()
-
-        R_pos = R_pos.view([batchsize,-1,self.conv_after_x,self.conv_after_y])
-        R_neg = R_neg.view([batchsize,-1,self.conv_after_x,self.conv_after_y])
-        R = torch.cat((R_pos,R_neg),1)
+        a_pos = a_pos.view([batchsize,-1,self.conv_after_x,self.conv_after_y])
+        a_neg = a_neg.view([batchsize,-1,self.conv_after_x,self.conv_after_y])
+        R = torch.cat((a_pos,a_neg),1)
         # [n_img_per_batch, 192*2, 32, 32] 
 
         return R
