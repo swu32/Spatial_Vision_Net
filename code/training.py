@@ -143,18 +143,27 @@ def main_worker(args):
         print('batch size is ', args.batch_size)
         if this_net == "baseline_net":  # make sure the simple net is working for pilot training.
 
-            model = models.resnet18(num_classes=10)
+            model = models.construct_resnet18(num_classes=10)
 
             print('Employing simple net')
             model = models.simple_net(n_freq=12, n_orient=8, n_phase=2, imsize=224, num_classes=1000)
         elif this_net == "SV_net_I":
-            model =
-        elif this_net == "SV_net_low_frequency":
-        elif this_net == "SV_net_II":
+            print('Employing the first version of Spatial Vision Net')
+            model = models.construct_svnet_1(n_freq  = 12, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
+        elif this_net == "SV_net_I_low_frequency":
+            print('Employing the low frequency version of Spatial Vision Net')
+            model = models.construct_svnet_low_f(n_freq  = 6, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
+        elif this_net == "SV_net_II":  # make sure the simplenet is working for pilot training.
+            print('Employing simple net')
+            model = models.construct_svnet_2(n_freq  = 12, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
+        elif this_net == "SV_net_II_low_frequency":
+            print('Employing simple net with low frequency')
+            model = models.construct_svnet_2_low_f(n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224,num_classes=1000)
         elif this_net == "SV_LN":
+            model = models.construct_LN_net()
         elif this_net == "SV_net_ALL_FreqL":
             print('Employing simple net with low frequency')
-            model = models.low_freq_simple_net(n_freq=12, n_orient=8, n_phase=2, imsize=224, num_classes=1000)
+            model = models.construct_SV_net_all_freq(n_freq=12, n_orient=8, n_phase=2, imsize=224, num_classes=1000)
 
 
     this_net = ["baseline_net", "SV_net_I", "SV_net_I_low_frequency", "SV_net_II", "SV_LN", "SV_net_ALL_FreqL"]
