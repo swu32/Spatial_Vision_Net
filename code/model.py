@@ -82,14 +82,17 @@ class Spatial_Vision_Net(nn.Module):
     def forward(self, x):
         x = self.v1(x) # (n_batch,n_feature, featureoutput, featureoutput)
         x = self.conv1(x) # (n_batch,64, convolution_output, convolution_output)
+        #print(x.shape)
         x = self.bn1(x) 
         x = self.relu(x)
         x = self.maxpool(x)
+        #print(x.shape)
         x = self.layer1(x) # ?
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
         # x = self.avgpool(x)
+        # print(x.shape)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
@@ -148,8 +151,9 @@ class Spatial_Vision_Net_II(nn.Module):
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2) # 2
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2) # 2
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2) # 2
-        self.linear = nn.Linear(512*block.expansion, num_classes)
-
+        #self.linear = nn.Linear(512*block.expansion, num_classes)
+        self.linear = nn.Linear(512*49,num_classes)
+        #print(block.expansion)
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
         layers = []
@@ -160,13 +164,17 @@ class Spatial_Vision_Net_II(nn.Module):
 
     def forward(self, x):
         x = self.v1(x) # (n_batch,n_feature, featureoutput, featureoutput)
+        #print(x.shape)
         x = self.bn1(x) # torch.Size([5, 384, 33, 33])
+        #print(x.shape)
         x = self.layer1(x) # ([5, 64, 33, 33])
         x = self.layer2(x) # [5, 128, 17, 17]
         x = self.layer3(x) # [5, 256, 9, 9]
         x = self.layer4(x) # [5, 512, 5, 5]
         x = F.avg_pool2d(x, 4) # ([5, 512, 1, 1])
+        #print(x.shape)
         x = x.view(x.size(0), -1) # torch.Size([5, 512])
+        #print(x.shape)
         x = self.linear(x)
         return x
 
@@ -218,7 +226,7 @@ class mean_padding(torch.nn.Module): # checked
         """
         """
         n_img_per_batch = x.shape[0] #this has to be true
-        print('n image per batch is ', n_img_per_batch)
+        #print('n image per batch is ', n_img_per_batch)
         assert x.shape[2] == x.shape[3],'The image to be mean padded should be square sized'
         mean_batch = torch.mean(torch.mean(x,3),2).view([n_img_per_batch,1,1,1])
         mean_batch = torch.mul(self.padding,mean_batch)
@@ -277,7 +285,7 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         filter_banks = torch.FloatTensor(filter_banks)
         # filter_banks = filter_banks.type(torch.FloatTensor)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        filter_banks = filter_banks.to(device)
+        filter_banks = filter_banks.to(device).contiguous()
         return filter_banks
 
     def forward(self, x):
@@ -287,7 +295,9 @@ class log_Gabor_convolution(torch.nn.Module): # checked
         returns a with shape [n_imag_per_batch,2*n_freq*n_orient,imgsize+1, img_size+1]
         """
         # assert self.batchsize == x.shape[0], "batch size needs to match the zeroth dimension of x"
-        x = self.mean_padding(x)
+        x = self.mean_padding(x).contiguous()
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        x = x.to(device)
         x = F.conv2d(x, self.combined_filters)
         return x
     
@@ -448,7 +458,9 @@ class V1_Imagenet_net(nn.Module):
     def forward(self, images):
         # [4,3,32,32]
         batchsize = images.shape[0]
-        a_ = self.logabor(images).contiguous()
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        a_ = self.logabor(images).contiguous().to(device)
         B_normalization = self.normalization(a_) # the same till here
         A = a_.view([batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
         R = self.nonlinearity(A,B_normalization).contiguous()
