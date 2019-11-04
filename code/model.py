@@ -86,7 +86,7 @@ class ResNet(nn.Module):
 class SpatialVisionNet(nn.Module):
     """Main Class for Spatial Vision Net"""
 
-    def __init__(self, block, layers, low_freq = False, num_classes=1000, n_freq=12, n_orient=8, n_phase=2, imsize=224):
+    def __init__(self, block, layers, low_freq=False, num_classes=1000, n_freq=12, n_orient=8, n_phase=2, imsize=224):
         super(SpatialVisionNet, self).__init__()
         self.inplanes = 64
         self.n_freq = n_freq
@@ -97,7 +97,7 @@ class SpatialVisionNet(nn.Module):
             self.v1 = V1ImagenetNet(n_freq=int(self.n_freq/2), n_orient=self.n_orient, n_phase=self.n_phase, im_size=self.imsize, low_freq=True)
             self.conv1 = nn.Conv2d(int(self.n_freq/2)*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3, bias=False)
         else:
-            self.v1 = V1ImagenetNet(n_freq=self.n_freq, n_orient = self.n_orient, n_phase = self.n_phase, im_size=self.imsize)
+            self.v1 = V1ImagenetNet(n_freq=self.n_freq, n_orient=self.n_orient, n_phase=self.n_phase, im_size=self.imsize)
             self.conv1 = nn.Conv2d(n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
         # specify parameters for the rest of the network
@@ -120,19 +120,11 @@ class SpatialVisionNet(nn.Module):
                 m.bias.data.zero_()
 
     def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
-            )
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
+        layers.append(block(self.inplanes, planes, stride))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
-
         return nn.Sequential(*layers)
 
     def forward(self, x):
@@ -266,20 +258,20 @@ class Integrated_Net(nn.Module):
         return x_total
 
 
-class Spatial_Vision_Net_III(nn.Module):
+class SpatialVisionNetIII(nn.Module):
     '''An extremely simplified version of SV_net; used for MNIST'''
 
-    def __init__(self, num_classes=10, n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 32):
-        super(Spatial_Vision_Net_III, self).__init__()
+    def __init__(self, num_classes=10, n_freq=12, n_orient=8, n_phase=2, imsize=32):
+        super(SpatialVisionNetIII, self).__init__()
         self.inplanes = 64
         self.n_phase = n_phase
         self.imsize = imsize
         self.n_freq = n_freq
         self.n_orient = n_orient
-        self.v1 = SV_net(n_freq  = int(self.n_freq/2), n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize, low_freq = True)
+        self.v1 = SvNet(n_freq  = int(self.n_freq/2), n_orient = self.n_orient, n_phase = self.n_phase, imsize = self.imsize, low_freq = True)
         self.conv1 = nn.Conv2d(n_freq*n_orient*n_phase, 64, kernel_size=7, stride=2, padding=3)
         self.pool = nn.MaxPool2d(2, 2)
-        self.dropout = nn.Dropout(p = 0.5)
+        self.dropout = nn.Dropout(p=0.5)
         self.conv2 = nn.Conv2d(64, 16, 2)
         self.fc1 = nn.Linear(16 * 3 * 3, num_classes)
 
@@ -306,23 +298,21 @@ class MeanPadding(torch.nn.Module):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.padding = torch.ones([1, 1, sz+pad_l*2, sz+pad_l*2]).to(device)
         self.pad_l = pad_l
-        self.mean = torch.mean()
-        self.mul = torch.mul()
 
     def forward(self, x):
         # n_img_per_batch = x.shape[0]  # this has to be true
         # print('n image per batch is ', n_img_per_batch)
         # print(x.shape[2],x.shape[3])
         assert x.shape[2] == x.shape[3], 'Warning: The image to be mean padded should be square sized'
-        mean_batch = self.mean(self.mean(x, 3), 2).view([-1, 1, 1, 1])
-        mean_batch = self.mul(self.padding, mean_batch)
+        mean_batch = torch.mean(torch.mean(x, 3), 2).view([-1, 1, 1, 1])
+        mean_batch = torch.mul(self.padding, mean_batch)
         mean_batch[:, :, self.pad_l:-self.pad_l, self.pad_l:-self.pad_l] = x
         return mean_batch
 
 
 class LogGaborConvolution(torch.nn.Module):  # checked
 
-    def __init__(self, sz=32, n_freq=12, n_orient=8, n_phase=2, low_freq=False):
+    def __init__(self, sz=32, low_freq=False):
         """
         low_freq: only use half of the filters starting with the lowest frequency
         """
@@ -336,12 +326,11 @@ class LogGaborConvolution(torch.nn.Module):  # checked
     def load_filter_bank(self, low_freq=False, sz=32):
         """Assumes a certain structure of filter file, returns a filter bank"""
         if sz == 32:  # load filter bank for 32 by 32 images
-            path = './spatial_filters.mat'
+            path = './filter_data/spatial_filters_32_by_32.mat'
         elif sz == 128:
-            # TODO: generate filter banks with 128 by 128 pixels from MATLAB.
-            pass
+            path = './filter_data/spatial_filters_128_by_128.mat'
         else:  # load filter bank for 224 by 224 images
-            path = './spatial_filters_224_by_224.mat'
+            path = './filter_data/spatial_filters_224_by_224.mat'
         # TODO: MAYBE TAKE THIS OUT OF THE EXECUTION,
         mat = scipy.io.loadmat(path)
         spatial_filters_imag = torch.tensor(mat['spatial_filters_imag'])
@@ -365,9 +354,9 @@ class LogGaborConvolution(torch.nn.Module):  # checked
 
         for f in range(start,n_freq):
             for o in range(0, n_orient):
-                filter_banks[s, 0, :, :] = spatial_filters_real[f, o] - np.mean(spatial_filters_real[f, o])
+                filter_banks[s, 0, :, :] = spatial_filters_real[f, o] - torch.mean(spatial_filters_real[f, o])
                 s = s + 1
-                filter_banks[s, 0, :, :] = spatial_filters_imag[f, o] - np.mean(spatial_filters_imag[f, o])
+                filter_banks[s, 0, :, :] = spatial_filters_imag[f, o] - torch.mean(spatial_filters_imag[f, o])
                 s = s + 1
 
         filter_banks = torch.FloatTensor(filter_banks)
@@ -392,7 +381,7 @@ class LogGaborConvolution(torch.nn.Module):  # checked
 class Normalization(nn.Module):
     """Calculated Normalized Layer, essential the coefficients b_i,
     apply convolution with 4d gaussian with a^p, where a is the result of convolution with customized filter."""
-    def __init__(self, n_freq = 12, p = 2,sz = 224, l_x = 32,l_y = 32,l_f = 3,l_o = 3,padxy_l = 16,padxy_r = 15,padxy_t = 16,padxy_b = 15,pad_fo = 1,w_x = 1,
+    def __init__(self, n_freq=12, p=2, sz=224, l_x=32, l_y=32, l_f=3,l_o=3,padxy_l = 16,padxy_r = 15,padxy_t = 16,padxy_b = 15,pad_fo = 1,w_x = 1,
     w_y = 1,w_f = 1,w_o = 1):
         """
         p: power to multiply
@@ -478,9 +467,6 @@ class Nonlinearity(nn.Module):
         self.p = p
         self.q = q
         self.C = C
-        self.div = torch.div()
-        self.pow = torch.pow()
-        self.add = torch.add()
 
 
     def forward(self, A, B):
@@ -488,7 +474,7 @@ class Nonlinearity(nn.Module):
             [n_image_per_batch, n_freq,_n_orientation,n_phase, width_after_convolution, height_after_convolution]"""
         #assert A.shape ==B.shape, "The shape of a and b needs to be the same"
         #Addition = torch.add(torch.tensor(self.C**self.p),B) # Addition is ok, no nans 
-        r = self.div(self.pow(A, (self.p+self.q)), self.add(torch.tensor(self.C**self.p), B))
+        r = torch.div(torch.pow(A, (self.p+self.q)), torch.add(torch.tensor(self.C**self.p), B))
         return r
 
 
@@ -500,13 +486,13 @@ class V1ImagenetNet(nn.Module):
         self.n_orient = n_orient
         self.n_phase = n_phase
         self.im_size = im_size
-        self.conv_after_x = self.imsize*2 - self.im_size + 1
+        self.conv_after_x = self.im_size*2 - self.im_size + 1
         self.conv_after_y = self.conv_after_x  # assume square images
         if low_freq:
-            self.log_gabor = LogGaborConvolution(sz=self.im_size, n_freq=self.n_freq, n_orient=self.n_orient, n_phase=self.n_phase, low_freq=True)
+            self.log_gabor = LogGaborConvolution(sz=self.im_size, low_freq=True)
         else:
-            self.log_gabor = LogGaborConvolution(sz=self.im_size, n_freq=self.n_freq, n_orient=self.n_orient, n_phase=self.n_phase)
-        self.sz_after_filtering = self.imsize*2 - self.im_size + 1
+            self.log_gabor = LogGaborConvolution(sz=self.im_size)
+        self.sz_after_filtering = self.im_size*2 - self.im_size + 1
         self.normalization = Normalization(sz=self.sz_after_filtering)
         self.nonlinearity = Nonlinearity()
 
@@ -531,18 +517,16 @@ class SvNet(nn.Module):
         self.conv_after_x = self.imsize*2 - self.imsize + 1
         self.conv_after_y = self.conv_after_x  # assume square images
         if low_freq:    
-            self.logabor = LogGaborConvolution(sz=self.imsize, n_freq=self.n_freq,
-                                               n_orient=self.n_orient, n_phase=self.n_phase, low_freq=True)
+            self.logabor = LogGaborConvolution(sz=self.imsize, low_freq=True)
         else:
-            self.logabor = LogGaborConvolution(sz=self.imsize, n_freq=self.n_freq,
-                                               n_orient=self.n_orient, n_phase=self.n_phase)
+            self.logabor = LogGaborConvolution(sz=self.imsize)
 
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
         self.normalization = Normalization(n_freq=self.n_freq, sz=self.sz_after_filtering)
         self.nonlinearity = Nonlinearity()
 
-    def sign_segragation(self,this_filter_o):
-        # input: some filters output
+    def sign_segragation(self, this_filter_o):
+        # input: filter response
         # output, positive and negative filter activities, to be processed separately
         sign = this_filter_o > 0
         if torch.cuda.is_available():
@@ -552,25 +536,23 @@ class SvNet(nn.Module):
 
         positive = this_filter_o*sign
         negative = -1*this_filter_o*(1-sign)
-        return positive, negative # returns only positive values for competition/gain control
+        return positive, negative  # returns only positive values for competition/gain control
 
     def forward(self, images):
         # separate positive and negative part of a_ for normalization
         batchsize = images.shape[0]
         a_ = self.logabor(images).contiguous()
-        a_pos, a_neg =self.sign_segragation(a_)
+        a_pos, a_neg = self.sign_segragation(a_)
         # B_normalization_pos = self.normalization(a_pos) # the same till here
         # B_normalization_neg = self.normalization(a_neg) # the same till here
-        a_pos = a_pos.view([batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
-        a_neg = a_neg.view([batchsize,self.n_freq,self.n_orient,self.n_phase,self.conv_after_x,self.conv_after_y])
-        a_pos = self.nonlinearity(a_pos,self.normalization(a_pos)).contiguous()
-        a_neg = self.nonlinearity(a_neg,self.normalization(a_neg)).contiguous()
-
-        a_pos = a_pos.view([batchsize,-1,self.conv_after_x,self.conv_after_y])
-        a_neg = a_neg.view([batchsize,-1,self.conv_after_x,self.conv_after_y])
-        R = torch.cat((a_pos,a_neg),1)
-        # [n_img_per_batch, 192*2, 32, 32] 
-
+        a_pos = a_pos.view([batchsize, self.n_freq, self.n_orient, self.n_phase, self.conv_after_x, self.conv_after_y])
+        a_neg = a_neg.view([batchsize, self.n_freq, self.n_orient, self.n_phase, self.conv_after_x, self.conv_after_y])
+        a_pos = self.nonlinearity(a_pos, self.normalization(a_pos)).contiguous()
+        a_neg = self.nonlinearity(a_neg, self.normalization(a_neg)).contiguous()
+        a_pos = a_pos.view([batchsize, -1,self.conv_after_x, self.conv_after_y])
+        a_neg = a_neg.view([batchsize, -1, self.conv_after_x, self.conv_after_y])
+        R = torch.cat((a_pos, a_neg), 1)
+        # [n_img_per_batch, 192*2, 32, 32]
         return R
 
 
@@ -588,12 +570,12 @@ class SV_integrated_net(nn.Module):
         self.conv_after_x = self.imsize*2 - self.imsize + 1
         self.conv_after_y = self.conv_after_x # assume square images
         if low_freq:
-            self.logabor = log_Gabor_convolution(sz = imsize, low_freq = True)
+            self.logabor = LogGaborConvolution(sz=imsize, low_freq=True)
         else:
-            self.logabor = log_Gabor_convolution(sz = imsize)
+            self.logabor = LogGaborConvolution(sz=imsize)
 
         self.sz_after_filtering = self.imsize*2 - self.imsize + 1
-        self.normalization =  Normalization(n_freq = self.n_freq, sz = self.sz_after_filtering)
+        self.normalization = Normalization(n_freq=self.n_freq, sz=self.sz_after_filtering)
         self.nonlinearity = Nonlinearity()
     def sign_segragation(self,this_filter_o):
         # input: some filters output
@@ -700,14 +682,14 @@ def construct_svnet_low_f(**kwargs):
 def construct_svnet_2(**kwargs):
     # a net with positive and negative signal separation and a simple backend.
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = Spatial_Vision_Net_II(BasicBlock, [2, 2, 2, 2], **kwargs)
+    model = SpatialVisionNetII(BasicBlock, [2, 2, 2, 2], **kwargs)
     model.to(device)
     return model
 
 
 def construct_svnet_2_low_f(**kwargs):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = Spatial_Vision_Net_II(BasicBlock, [2, 2, 2, 2], low_freq=True, **kwargs)
+    model = SpatialVisionNetII(BasicBlock, [2, 2, 2, 2], low_freq=True, **kwargs)
     model.to(device)
     return model
 
@@ -723,7 +705,7 @@ def construct_integrated_net(**kwargs):
 def construct_simple_net_3(pretrained=False, **kwargs):
     # designed for MNIST experiments to test SV_net's adversarial robustness.
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = Spatial_Vision_Net_III(**kwargs)
+    model = SpatialVisionNetIII(**kwargs)
     model.to(device)
     return model
 
@@ -737,6 +719,11 @@ def construct_resnet18(pretrained=False, **kwargs):
     if pretrained: # loading state dictionary from online models. Should not be used here.
         model.load_state_dict(model_zoo.load_url(model_urls['resnet18']))
     return model
+
+def construct_ln_net():
+    """Construct Versions of SV Net where Divisive Normalization is learned"""
+    pass
+
 
 
 model_urls = {

@@ -18,93 +18,56 @@ import numpy as np
 import model as models
 from datetime import date
 
-# TODO: Integrate IMAGENET training and CIFAR10 in one single file.
-
+# TODO: Adjust to be compatbale with MNIST and CIFAR training
 # TODO: concatinate this list of models, with better explanation for each of them.
 
-this_net = ["baseline_net", "SV_net_I","SV_net_I_low_frequency","SV_net_II","SV_LN", "SV_net_ALL_FreqL"]
-Data = ["ImageNet","CIFAR10"]
-# this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
-'''
-all the net architecture to choose from: 
+this_net = ["Vanilla_ResNet", "SV_Net_I", "SV_Net_I_Low_Freq", "SV_Net_II", "SV_Net_II_Low_Freq", "SV_Net_LN",
+            "SV_Net_All_Freq"]
 
-"baseline_net": a resnet18 implemented on ImageNet
-correspond to:
-ImageNet_baseline_model_best.pth &
-ImageNet_baseline_checkpoint.pth 
+Data = ["ImageNet128","ImageNet224", "CIFAR10", "MNIST"]
+# this_net “Vanilla_ResNet”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
 
-"SV_net_I: first version of spatial vision net, with Spatial vision part as front end and resnet18 as backend,
-correspond to 
-ImageNet_normalization_model_best.pth.tar, & 
-ImageNet_normalization_checkpoint.pth.tar"
-
-"SV_net_I_low_frequency": same thing with SV_net_I, but employing only the lower half of the frequency filters,
-correspond to
-ImageNet_low_freq_model_best.pth & 
-ImageNet_low_freq_checkpoint.pth & 
-
-"SV_net_II": A simplified and a more updated version of SV_net_I. The spatial vision frontend has filter responses 
-separated between positive and negative, and the spatial vision backend has similar structure instead of Resnet18, for 
-the purpose of overcoming the over-fitting behavior of the resnet18 backend. 
-ImageNet_SV_net_II_model_best.pth.tar &
-ImageNet_SV_net_II_model_checkpoint.pth.tar
-
-"SV_net_II_low_frequency": 
-A version of SV_net_II with only half of the lower frequency filters employed. 
-ImageNet_SV_net_II_low_frequency_model_best.pth.tar &
-ImageNet_SV_net_II_low_frequency_model_checkpoint.pth.tar
-
-"SV_LN":
-A spatial vision net that learns the normalization weights, requires collaboration with Max.
-ImageNet_SV_LN_best.pth.tar &
-ImageNet_SV_LN_checkpoint.pth.tar
-
-"SV_multiple_frequencies":
-A spatial vision net with frequency channels trained separately.
-ImageNet_SV_MF_best.pth.tar &
-ImageNet_SV_MF_checkpoint.pth.tar 
-'''
-
+# TODO: test code with training and evaluation
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
                      and callable(models.__dict__[name]))
 
 # TODO: add this net to choice one of the arguments
 parser = argparse.ArgumentParser(description='Set up training parameters')
-parser.add_argument('data', metavar='DIR', default='/gpfs01/bethge/data/imagenet-raw/raw-data',
-                    help='path to data set')
+
+parser.add_argument('-path', metavar='DIR', default='/gpfs01/bethge/data/imagenet-raw/raw-data',
+                    help='path to data set, default is the imagenet location')
+
+parser.add_argument('-d', '--data', metavar='DATA', default='ImageNet128', dest="data",
+                    choices=Data, help='Data Used to Train: ' + ' | '.join(Data) + ' (default: ImageNet128)')
+
 # TODO: this_net should not be a list.
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
-                    choices=this_net,
-                    help='model architecture: ' +
-                         ' | '.join(this_net) +
-                         ' (default: resnet18)')
-parser.add_argument('--epochs', default=80, type=int, metavar='N',
+parser.add_argument('-a', '--arch', metavar='ARCH', default='Vanilla_ResNet', dest="arch",
+                    choices=this_net, help='model architecture: ' + ' | '.join(this_net) + ' (default: resnet18)')
+parser.add_argument('--epochs', default=80, type=int, metavar='N', dest="epochs",
                     help='number of total epochs to run')
-parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
+parser.add_argument('--start-epoch', default=0, type=int, metavar='N', dest="start_epoch",
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
+parser.add_argument('-b', '--batch-size', default=256, type=int, dest="batchsize",
                     metavar='N',
                     help='mini-batch size (default: 4), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate', dest='lr')
-parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
+parser.add_argument('--momentum', default=0.9, type=float, metavar='M', dest="momentum",
                     help='momentum')
 parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)',
-                    dest='weight_decay')
+                    metavar='W', help='weight decay (default: 1e-4)', dest='weight_decay')
 parser.add_argument('-p', '--print-freq', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
-parser.add_argument('--pretrained', dest='pretrained', action='store_true',
-                    help='use pre-trained model')
-parser.add_argument('--seed', default=None, type=int,
+parser.add_argument('--seed', default=None, type=int, dest= "seed",
                     help='seed for initializing training. ')
+
 
 best_acc1 = 0
 
@@ -113,6 +76,10 @@ def main():
     """Collect User Defined Variables"""
 
     args = parser.parse_args()
+
+    # Namespace(arch='Vanilla_ResNet', batch_size=256, epochs=80, evaluate=False, lr=0.1,
+    # momentum=0.9, path='\\data',
+    # print_freq=10, resume='', seed=None, start_epoch=0, weight_decay=0.0001)
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -132,54 +99,76 @@ def main_worker(args):
     global best_acc1
 
     # define the model used for training.
-    if args.pretrained:
-        # TODO: something needs to be changed here.
-        print("=> using pre-trained model '{}'".format(args.arch))
-        model = models.__dict__[args.arch](pretrained=True)
+    # TODO: implement integrated net across 12 different frequencies.
+    print("=> creating model '{}'".format(args.arch))
+    print('batch size is ', args.batchsize)
+    if args.data == "ImageNet128":
+        image_size = 128
+        n_classes = 1000
+    elif args.data == "ImageNet224":
+        image_size = 224
+        n_classes = 1000
+    elif args.data == "CIFAR10":
+        image_size = 32
+        n_classes = 10
+    elif args.data == "MNIST":
+        image_size = 32
+        n_classes = 10
     else:
-        # TODO: implement integrated net across 12 different frequencies.
-        # TODO: add other models here.
-        print("=> creating model '{}'".format(args.arch))
-        print('batch size is ', args.batch_size)
-        if this_net == "baseline_net":  # make sure the simple net is working for pilot training.
+        print("No such data set!")
 
-            model = models.construct_resnet18(num_classes=10)
+    filename = args.arch + '_checkpoint.pth.tar'
+    best_file_name = args.arch + '_model_best.pth.tar'
+    if args.arch == "Vanilla_ResNet":  # make sure the simple net is working for pilot training.
+        # TODO: IF WORKS
+        print('Employing Vanilla ResNet')
+        model = models.construct_resnet18(num_classes=n_classes)
+    elif args.arch == "SV_Net_I":
+        # TODO: IF WORKS
 
-            print('Employing simple net')
-            model = models.simple_net(n_freq=12, n_orient=8, n_phase=2, imsize=224, num_classes=1000)
-        elif this_net == "SV_net_I":
-            print('Employing the first version of Spatial Vision Net')
-            model = models.construct_svnet_1(n_freq  = 12, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
-        elif this_net == "SV_net_I_low_frequency":
-            print('Employing the low frequency version of Spatial Vision Net')
-            model = models.construct_svnet_low_f(n_freq  = 6, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
-        elif this_net == "SV_net_II":  # make sure the simplenet is working for pilot training.
-            print('Employing simple net')
-            model = models.construct_svnet_2(n_freq  = 12, n_orient = 8, n_phase = 2,imsize = 224,num_classes=1000)
-        elif this_net == "SV_net_II_low_frequency":
-            print('Employing simple net with low frequency')
-            model = models.construct_svnet_2_low_f(n_freq  = 12, n_orient = 8, n_phase = 2, imsize = 224,num_classes=1000)
-        elif this_net == "SV_LN":
-            model = models.construct_LN_net()
-        elif this_net == "SV_net_ALL_FreqL":
-            print('Employing simple net with low frequency')
-            model = models.construct_SV_net_all_freq(n_freq=12, n_orient=8, n_phase=2, imsize=224, num_classes=1000)
+        print('Employing the first version of Spatial Vision Net')
+        model = models.construct_svnet_1(imsize=image_size, num_classes=n_classes)
+    elif args.arch == "SV_Net_I_Low_Freq":
+        # TODO: IF WORKS
 
+        print('Employing the low frequency version of Spatial Vision Net')
+        model = models.construct_svnet_low_f(imsize=image_size, num_classes=n_classes)
+    elif args.arch == "SV_Net_II":  # make sure the simplenet is working for pilot training.
+        print('Employing simple net')
+        # TODO: IF WORKS
 
-    this_net = ["baseline_net", "SV_net_I", "SV_net_I_low_frequency", "SV_net_II", "SV_LN", "SV_net_ALL_FreqL"]
+        model = models.construct_svnet_2(imsize=image_size, num_classes=n_classes)
+    elif args.arch == "SV_Net_II_Low_Freq":
+        # TODO: IF WORKS
+
+        print('Employing simple net with low frequency')
+        model = models.construct_svnet_2_low_f(imsize=image_size,num_classes=n_classes)
+    elif args.arch == "SV_Net_LN":
+        # TODO: IF WORKS
+
+        model = models.construct_integrated_net(imsize=image_size,num_classes=n_classes)
+    elif args.arch == "SV_Net_All_Freq":
+        # TODO: IF WORKS
+
+        print('Employing simple net with low frequency')
+        model = models.construct_SV_net_all_freq(imsize=image_size, num_classes=n_classes)
 
     today = date.today()
-    record_file_name = 'ImageNet_performance_record' + this_net + str(today) + '.npy'  # File to record learning rate
+    this_net = ["Vanilla_ResNet", "SV_Net_I", "SV_Net_I_Low_Freq", "SV_Net_II", "SV_Net_II_Low_Freq", "SV_Net_LN",
+                "SV_Net_All_Freq"]
+    Data = ["ImageNet128", "ImageNet224", "CIFAR10", "MNIST"]
+    #
+    # record_file_name = args.data + '_Performance_Record_' + args.arch + "_" + args.epochs + args.start_epoch + args.batchsize + args.lr + args.momentum + args.weight_decay + args.seed, str(
+    #     today) + '.npy'  # File to record learning rate
+
+    record_file_name = args.data + '_Performance_Record_' + args.arch + "_" + str(today) + '.npy'  # File to record learning rate
 
     # this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # model.to(device)
     model = torch.nn.DataParallel(model).to(device)
-    # define loss function (criterion) and optimizer
     # TODO: modify loss criterion to be compatible with independent filter responses
     criterion = nn.CrossEntropyLoss().to(device)
-
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
@@ -200,21 +189,30 @@ def main_worker(args):
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     cudnn.benchmark = True
+    #
+    # train_dir = os.path.join(args.path, 'train')
+    # val_dir = os.path.join(args.path, 'val')
 
-    train_dir = os.path.join(args.data, 'train')
-    val_dir = os.path.join(args.data, 'val')
-
+    train_dir = args.path
+    val_dir = args.path
     # normalization for RGB values
-    normalize_rgb = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    normalize_gray= transforms.Normalize((0.449,), (0.226,))
+    if args.data == "CIFAR10":
+        normalize_rgb = transforms.Normalize((0.5, 0.5, 0.5),(0.5, 0.5, 0.5))
+        normalize_gray = transforms.Normalize((0.5,), (0.5,))
+        # transforms sequentially, mean and variance prespecified
+    elif args.data == "MNIST":
+        normalize_rgb = transforms.Normalize((0.5, 0.5, 0.5),(0.5, 0.5, 0.5))
+        normalize_gray = transforms.Normalize((0.5,), (0.5,))
+    else:
+        normalize_rgb = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        normalize_gray = transforms.Normalize((0.449,), (0.226,))
 
     # data pre processing according to network type
     if this_net == "baseline_net":
-
         train_data = datasets.ImageFolder(
             train_dir,
             transforms.Compose([
-                transforms.RandomResizedCrop(224),
+                transforms.RandomResizedCrop(image_size),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 normalize_rgb,
@@ -227,7 +225,7 @@ def main_worker(args):
         val_loader = torch.utils.data.DataLoader(
             datasets.ImageFolder(val_dir, transforms.Compose([
                 transforms.Resize(256),
-                transforms.CenterCrop(224),
+                transforms.CenterCrop(image_size),
                 transforms.Grayscale(),
                 transforms.ToTensor(),
                 normalize_rgb,
@@ -237,7 +235,7 @@ def main_worker(args):
         train_data = datasets.ImageFolder(
             train_dir,
             transforms.Compose([
-                transforms.RandomResizedCrop(224),  # Strange random RandomResizedCrop(224,scale = (0.08,0.50)),
+                transforms.RandomResizedCrop(image_size),  # Strange random RandomResizedCrop(224,scale = (0.08,0.50)),
                 transforms.RandomHorizontalFlip(),
                 transforms.Grayscale(),
                 transforms.ToTensor(),
@@ -251,7 +249,7 @@ def main_worker(args):
         val_loader = torch.utils.data.DataLoader(
             datasets.ImageFolder(val_dir, transforms.Compose([
                 transforms.Resize(256),
-                transforms.CenterCrop(224),
+                transforms.CenterCrop(image_size),
                 transforms.Grayscale(),
                 transforms.ToTensor(),
                 normalize_gray,
@@ -278,9 +276,9 @@ def main_worker(args):
         acc1 = validate(val_loader, model, criterion, args)
 
         # update performance record
-        performance_record['epoch'].append(epoch)
-        performance_record['train_acc'].append(acc1_train)
-        performance_record['test_acc'].append(acc1)
+        performance_record['epoch'].append(int(epoch))
+        performance_record['train_acc'].append(float(acc1_train))
+        performance_record['test_acc'].append(float(acc1))
 
         # remember best acc1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -292,7 +290,7 @@ def main_worker(args):
             'state_dict': model.state_dict(),
             'accuracy': best_acc1,
             'optimizer': optimizer.state_dict(),
-        }, is_best)
+        }, is_best,filename,best_file_name)
 
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
@@ -383,24 +381,8 @@ def validate(val_loader, model, criterion, args):
     return top1.avg
 
 
-def save_checkpoint(state, is_best):
+def save_checkpoint(state, is_best, filename, best_file_name):
     # TODO: add additional save functions here.
-    if this_net == "baseline_net":
-        filename = 'ImageNet_baseline_checkpoint.pth.tar'
-        best_file_name = 'ImageNet_baseline_model_best.pth.tar'
-    elif this_net == "SV_net_I":
-        filename = 'ImageNet_normalization_checkpoint.pth.tar'
-        best_file_name = 'ImageNet_normalization_model_best.pth.tar'
-    elif this_net == "SV_net_I_low_frequency":
-        filename = 'ImageNet_low_freq_model_checkpoint.pth.tar'
-        best_file_name = 'ImageNet_low_freq_model_best.pth.tar'
-    elif this_net == "SV_net_II":
-        filename = 'ImageNet_SV_net_II_model_checkpoint.pth.tar'
-        best_file_name = 'ImageNet_SV_net_II_model_best.pth.tar'
-    elif this_net == "SV_net_II_low_frequency":
-        filename = 'ImageNet_SV_net_II_low_frequency_model_checkpoint.pth.tar'
-        best_file_name = 'ImageNet_SV_net_II_low_frequency_model_best.pth.tar'
-
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, best_file_name)
