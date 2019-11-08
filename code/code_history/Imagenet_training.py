@@ -210,8 +210,7 @@ def main_worker(args):
             ]))
         train_sampler = None
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-            num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+            train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
         """TODO: add gray values"""
         val_loader = torch.utils.data.DataLoader(
@@ -221,7 +220,7 @@ def main_worker(args):
                 transforms.Grayscale(),
                 transforms.ToTensor(),
                 normalize_baseline,
-            ])),batch_size=args.batch_size, shuffle=False,num_workers=args.workers, pin_memory=True)
+            ])),batch_size=args.batch_size, shuffle=False, num_workers = args.workers, pin_memory=True)
 
 
 
@@ -247,7 +246,7 @@ def main_worker(args):
                 transforms.ToTensor(),
                 transforms.Normalize((0.449,), (0.226,))
             ])),
-            batch_size=args.batch_size, shuffle=False, num_workers=args.workers, pin_memory=True)
+            batch_size=args.batch_size, shuffle=False,num_workers=args.workers, pin_memory=True)
 
         # transform = transforms.Compose(
         #     [transforms.Grayscale(),transforms.ToTensor(),

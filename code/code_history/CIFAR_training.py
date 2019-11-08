@@ -8,7 +8,7 @@ import shutil
 import time
 import warnings
 import sys
-
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -24,8 +24,8 @@ import torchvision
 
 import model as models
 
-this_net = "SV_net_II"
-# this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II"
+this_net = "SV_net_II_low_frequency"
+# this_net “baseline_net”,"SV_net_I","SV_net_I_low_frequency","SV_net_II","SV_net_II_low_frequency"
 '''
 all the net architecture to choose from: 
 
